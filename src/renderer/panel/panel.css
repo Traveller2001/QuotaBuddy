@@ -209,15 +209,39 @@ header {
 
 /* ---------------------------------------------------------------- views */
 
+/* the window is transparent and may be taller than the panel while it animates: keep the panel
+   glued to the edge that is anchored (bottom when it sits above the buddies) */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+body[data-edge='bottom'] {
+  justify-content: flex-end;
+}
+
+#root {
+  flex: none;
+}
+
 #views {
   position: relative;
-  max-height: 560px; /* replaced at runtime with the screen height */
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   margin: 0 -4px;
   padding: 2px 4px;
+  transition: height 260ms var(--ease);
   scrollbar-width: thin;
   scrollbar-color: var(--surface-2) transparent;
+}
+
+#views.scroll {
+  overflow-y: auto;
 }
 
 #views::-webkit-scrollbar {
@@ -228,38 +252,37 @@ header {
   background: var(--surface-2);
 }
 
-/* All views share one grid cell: the panel keeps the height of the tallest one, so switching
-   tabs is a cross-fade instead of the window jumping. */
-#views {
-  display: grid;
-}
-
 .view {
-  grid-area: 1 / 1;
-  visibility: hidden;
-  opacity: 0;
-  transition:
-    opacity 160ms ease,
-    visibility 0s linear 160ms;
+  display: none;
 }
 
 .view.active {
-  visibility: visible;
-  opacity: 1;
-  transition:
-    opacity 220ms ease 60ms,
-    visibility 0s;
-  animation: viewIn 280ms var(--ease) 40ms backwards;
+  display: block;
+  animation: viewIn 260ms var(--ease) 40ms backwards;
+}
+
+/* the page being left stays on top, out of the flow, while it fades */
+.view.outgoing:not(.active) {
+  display: block;
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  right: 4px;
+  pointer-events: none;
+  animation: viewOut 170ms ease both;
 }
 
 @keyframes viewIn {
   from {
+    opacity: 0;
     translate: 0 4px;
   }
 }
 
-#view-login {
-  align-self: center;
+@keyframes viewOut {
+  to {
+    opacity: 0;
+  }
 }
 
 /* ---------------------------------------------------------------- cards */

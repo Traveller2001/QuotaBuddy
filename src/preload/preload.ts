@@ -16,6 +16,11 @@ const api = {
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   hidePanel: () => ipcRenderer.send('panel:hide'),
   panelLeft: () => ipcRenderer.send('panel:left'),
+  onPanelEdge: (cb: (edge: 'top' | 'bottom') => void) => {
+    const handler = (_e: unknown, edge: 'top' | 'bottom') => cb(edge);
+    ipcRenderer.on('panel:edge', handler);
+    return () => ipcRenderer.off('panel:edge', handler);
+  },
   /** capture mode only: switch the visible panel view */
   onDebugView: (cb: (view: string) => void) => {
     const handler = (_e: unknown, v: string) => cb(v);

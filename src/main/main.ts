@@ -13,7 +13,8 @@ import {
   Tray,
   type MenuItemConstructorOptions,
 } from 'electron';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { formatPercent } from '../shared/format';
 import { resolveLocale, t } from '../shared/i18n';
@@ -41,7 +42,22 @@ const CAPTURE_DIR = process.env.QB_CAPTURE;
 // One name everywhere: userData lives in <appData>/QuotaBuddy in dev and packaged builds alike.
 app.setName('QuotaBuddy');
 
-if (!app.requestSingleInstanceLock()) {
+// Screenshot / self-test runs use a throwaway profile and stay out of the single-instance lock, so
+// they never touch (or get blocked by) the copy the user is running — nor its login sessions.
+const TEST_RUN = !!(process.env.QB_CAPTURE || process.env.QB_SELFTEST);
+if (TEST_RUN) {
+  // leftovers from earlier runs (Chromium can still hold files while quitting)
+  for (const name of readdirSync(os.tmpdir()).filter((n) => n.startsWith('QuotaBuddy-test-'))) {
+    try {
+      rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true });
+    } catch {
+      // still in use by another test run
+    }
+  }
+  app.setPath('userData', path.join(os.tmpdir(), `QuotaBuddy-test-${process.pid}`));
+}
+
+if (!TEST_RUN && !app.requestSingleInstanceLock()) {
   app.quit();
 }
 
@@ -232,44 +248,58 @@ function createPanel(): void {
   panel.on('closed', () => (panel = null));
 }
 
-/** Content height reported by the panel renderer. Windows ignores setSize on hidden windows, so
- *  the size is applied right before showing (and live while visible). */
+/** Content height reported by the panel renderer. */
 let panelHeight = 520;
-function applyPanelSize(): void {
-  if (!panel) return;
-  const wa = screen.getDisplayMatching(panel.getBounds()).workArea;
-  const h = Math.round(Math.min(Math.max(panelHeight, 160), wa.height - 24));
-  const [w, current] = panel.getSize();
-  if (w !== PANEL_WIDTH || Math.abs(current - h) >= 2) panel.setSize(PANEL_WIDTH, h);
-}
-
 type Anchor = 'pet' | 'tray';
+type Edge = 'top' | 'bottom';
 let lastAnchor: Anchor = 'pet';
+let lastEdge: Edge | null = null;
 
-function positionPanel(anchor: Anchor = lastAnchor): void {
-  if (!panel) return;
-  const [w, h] = panel.getSize();
+/** Where the panel goes and which of its edges stays put while its height changes. */
+function panelPlacement(anchor: Anchor, w: number, h: number): { x: number; y: number; edge: Edge } {
   let ref: Electron.Rectangle | null = null;
   if (anchor === 'tray' && tray) ref = tray.getBounds();
   if ((!ref || ref.width === 0) && pet && petsVisible) ref = pet.getBounds();
-  const display = ref ? screen.getDisplayMatching(ref) : screen.getPrimaryDisplay();
-  const wa = display.workArea;
+  const wa = (ref ? screen.getDisplayMatching(ref) : screen.getPrimaryDisplay()).workArea;
   let x: number;
   let y: number;
+  let edge: Edge = 'bottom';
   if (!ref) {
     x = wa.x + wa.width - w - 16;
     y = wa.y + wa.height - h - 16;
+  } else if (anchor === 'tray' && ref.y < wa.y + wa.height / 2) {
+    // macOS menu bar (or a top taskbar): hang below it
+    x = Math.round(ref.x + ref.width / 2 - w / 2);
+    y = ref.y + ref.height + 4;
+    edge = 'top';
   } else if (anchor === 'tray') {
     x = Math.round(ref.x + ref.width / 2 - w / 2);
-    y = ref.y < wa.y + wa.height / 2 ? ref.y + ref.height + 4 : ref.y - h - 4;
+    y = ref.y - h - 4;
   } else {
     x = ref.x + ref.width - w;
     y = ref.y - h + 24;
-    if (y < wa.y) y = ref.y + ref.height + 4;
+    if (y < wa.y) {
+      y = ref.y + ref.height + 4;
+      edge = 'top';
+    }
   }
   x = Math.min(Math.max(x, wa.x + 4), wa.x + wa.width - w - 4);
   y = Math.min(Math.max(y, wa.y + 4), wa.y + wa.height - h - 4);
-  panel.setPosition(x, y);
+  return { x, y, edge };
+}
+
+/** Size and position in one setBounds call, so the panel never flashes at a half-moved spot. */
+function layoutPanel(anchor: Anchor = lastAnchor): void {
+  if (!panel) return;
+  const probe = pet ? pet.getBounds() : panel.getBounds();
+  const wa = screen.getDisplayMatching(probe).workArea;
+  const h = Math.round(Math.min(Math.max(panelHeight, 160), wa.height - 24));
+  const { x, y, edge } = panelPlacement(anchor, PANEL_WIDTH, h);
+  panel.setBounds({ x, y, width: PANEL_WIDTH, height: h });
+  if (edge !== lastEdge) {
+    lastEdge = edge;
+    panel.webContents.send('panel:edge', edge);
+  }
 }
 
 let leaving: NodeJS.Timeout | null = null;
@@ -285,8 +315,7 @@ function showPanel(anchor: Anchor = lastAnchor, focus = true): void {
     if (focus) panel.show();
     else panel.showInactive();
   }
-  applyPanelSize();
-  positionPanel(anchor);
+  layoutPanel(anchor);
   if (focus) panel.focus();
   panel.webContents.send('panel:enter', anchor);
 }
@@ -450,10 +479,7 @@ function registerIpc(): void {
   });
   ipcMain.on('panel:resize', (_e, height: number) => {
     panelHeight = height;
-    if (panel?.isVisible()) {
-      applyPanelSize();
-      positionPanel();
-    }
+    if (panel?.isVisible()) layoutPanel();
   });
 
   ipcMain.on('pet:resize', (_e, width: number, height: number) => {
@@ -510,10 +536,15 @@ async function capture(): Promise<void> {
   writeFileSync(path.join(CAPTURE_DIR, 'panel.png'), shot.toPNG());
   for (const v of (process.env.QB_CAPTURE_VIEWS ?? '').split(',').filter(Boolean)) {
     panel.webContents.send('panel:debug-view', v);
-    await wait(900);
-    applyPanelSize();
-    await wait(300);
+    await wait(1200);
     writeFileSync(path.join(CAPTURE_DIR, `panel-${v}.png`), (await panel.webContents.capturePage()).toPNG());
+  }
+  if (process.env.QB_CAPTURE_TOGGLE_DEMO) {
+    // reproduce "turn on demo mode while on a page": the visible page must keep its own height
+    demo = !demo;
+    await refreshAll();
+    await wait(1500);
+    writeFileSync(path.join(CAPTURE_DIR, 'panel-after-demo-toggle.png'), (await panel.webContents.capturePage()).toPNG());
   }
   writeFileSync(path.join(CAPTURE_DIR, 'state.json'), JSON.stringify(state, null, 2));
   app.quit();
@@ -536,6 +567,15 @@ function maybeOnboard(): void {
 // ------------------------------------------------------------------ lifecycle
 
 app.on('second-instance', () => togglePanel(lastAnchor));
+app.on('will-quit', () => {
+  if (TEST_RUN) {
+    try {
+      rmSync(app.getPath('userData'), { recursive: true, force: true });
+    } catch {
+      // Chromium may still hold a file; the OS temp cleaner will get it
+    }
+  }
+});
 app.on('window-all-closed', () => {
   // keep running in the tray
 });

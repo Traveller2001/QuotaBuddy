@@ -123,10 +123,7 @@ interface RefillItem {
 }
 
 /** Taller screens get a taller panel before it starts scrolling. */
-function fitViews(): void {
-  views.style.maxHeight = `${Math.max(320, window.screen.availHeight - 170)}px`;
-}
-fitViews();
+const maxViewsHeight = () => Math.max(320, window.screen.availHeight - 170);
 
 function refillItems(b: BuddySnapshot, locale: Locale): RefillItem[] {
   const now = Date.now();
@@ -568,10 +565,19 @@ function moveInk(): void {
 function setView(next: View): void {
   if (next === 'login' && state && !loginView.pending(state).length) next = 'overview';
   const changed = next !== view;
+  const previous = view;
   view = next;
+  const animate = changed && root.classList.contains('shown') && !reduceMotion;
   for (const section of views.querySelectorAll<HTMLElement>('.view')) {
-    section.classList.toggle('active', section.dataset.view === view);
-    section.toggleAttribute('inert', section.dataset.view !== view);
+    const active = section.dataset.view === view;
+    section.classList.toggle('active', active);
+    section.toggleAttribute('inert', !active);
+    if (active) section.classList.remove('outgoing');
+    if (animate && section.dataset.view === previous) {
+      // the old page fades out on top while the new one fades in and the height glides
+      section.classList.add('outgoing');
+      setTimeout(() => section.classList.remove('outgoing'), 200);
+    }
   }
   if (changed) views.scrollTop = 0;
   tabs.hidden = view === 'login';
@@ -581,6 +587,7 @@ function setView(next: View): void {
     if (state) loginView.update(state);
     loginView.focus();
   }
+  syncHeight(changed);
 }
 
 function render(): void {
@@ -607,18 +614,66 @@ function tickFooter(): void {
   $('updated').textContent = !fetched.length ? '' : age < 60000 ? t(L(), 'ui.justNow') : t(L(), 'ui.updated', { time: formatDuration(age) });
 }
 
-let lastHeight = 0;
-function reportHeight(): void {
-  const h = Math.ceil(root.getBoundingClientRect().height) + 16; // + #root margins
-  if (h === lastHeight) return;
-  lastHeight = h;
+// ------------------------------------------------------------------ height: follow the active page, smoothly
+
+const ROOT_MARGINS = 16; // #root margin top + bottom
+const VIEWS_PADDING = 4; // #views padding top + bottom
+let lastWindowHeight = 0;
+let pendingShrink = 0;
+
+function sendWindowHeight(h: number): void {
+  if (h === lastWindowHeight) return;
+  lastWindowHeight = h;
   qb().resizePanel(h);
 }
-new ResizeObserver(reportHeight).observe(root);
+
+/**
+ * The panel is as tall as the page being shown. Growing: the window grows first (the extra part is
+ * transparent) and the panel slides into it. Shrinking: the panel shrinks first and the window
+ * follows once the transition ends. The panel hugs the anchored edge, so nothing jumps.
+ */
+function syncHeight(animate = true): void {
+  const active = views.querySelector<HTMLElement>('.view.active');
+  if (!active) return;
+  const natural = active.offsetHeight + VIEWS_PADDING;
+  const target = Math.min(natural, maxViewsHeight());
+  views.classList.toggle('scroll', natural > target + 1);
+  const current = views.offsetHeight;
+  const windowHeight = root.offsetHeight - current + target + ROOT_MARGINS;
+  const visible = document.visibilityState === 'visible' && root.classList.contains('shown');
+  if (!animate || !visible || reduceMotion || Math.abs(target - current) < 1) {
+    views.style.transition = 'none';
+    views.style.height = `${target}px`;
+    void views.offsetHeight;
+    views.style.transition = '';
+    pendingShrink = 0;
+    sendWindowHeight(windowHeight);
+    return;
+  }
+  if (target > current) {
+    pendingShrink = 0;
+    sendWindowHeight(windowHeight);
+  } else {
+    pendingShrink = windowHeight;
+  }
+  views.style.height = `${target}px`;
+}
+
+views.addEventListener('transitionend', (e) => {
+  if (e.target !== views || e.propertyName !== 'height' || !pendingShrink) return;
+  sendWindowHeight(pendingShrink);
+  pendingShrink = 0;
+});
+
+const contentWatcher = new ResizeObserver(() => syncHeight(true));
+for (const section of views.querySelectorAll('.view')) contentWatcher.observe(section);
+document.fonts?.ready.then(() => syncHeight(false));
+qb().onPanelEdge((edge) => (document.body.dataset.edge = edge));
 
 function enter(): void {
   if (state && loginView.pending(state).length) setView('login');
   else if (view === 'login') setView('overview');
+  syncHeight(false);
   root.classList.remove('leaving');
   root.classList.add('shown');
   root.classList.remove('entering');
