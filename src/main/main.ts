@@ -35,8 +35,11 @@ const page = (name: string) => path.join(ROOT, 'dist', 'renderer', `${name}.html
 const preload = path.join(ROOT, 'dist', 'preload', 'preload.js');
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
-const PANEL_WIDTH = 360;
+const PANEL_WIDTH = 376;
 const CAPTURE_DIR = process.env.QB_CAPTURE;
+
+// One name everywhere: userData lives in <appData>/QuotaBuddy in dev and packaged builds alike.
+app.setName('QuotaBuddy');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -187,7 +190,7 @@ function createPet(): void {
     focusable: !isLinux ? false : true,
     show: false,
     backgroundColor: '#00000000',
-    title: 'Quota Buddies',
+    title: 'QuotaBuddy',
     webPreferences: webPreferences(),
   });
   pet.setAlwaysOnTop(true, 'floating');
@@ -216,7 +219,7 @@ function createPanel(): void {
     hasShadow: false,
     show: false,
     backgroundColor: '#00000000',
-    title: 'Quota Buddies',
+    title: 'QuotaBuddy',
     webPreferences: webPreferences(),
   });
   panel.setAlwaysOnTop(true, 'floating');
@@ -224,8 +227,7 @@ function createPanel(): void {
   panel.loadFile(page('panel'));
   panel.on('blur', () => {
     if (CAPTURE_DIR) return;
-    panel?.hide();
-    panelHiddenAt = Date.now();
+    hidePanel();
   });
   panel.on('closed', () => (panel = null));
 }
@@ -270,18 +272,48 @@ function positionPanel(anchor: Anchor = lastAnchor): void {
   panel.setPosition(x, y);
 }
 
+let leaving: NodeJS.Timeout | null = null;
+
+function showPanel(anchor: Anchor = lastAnchor, focus = true): void {
+  if (!panel) return;
+  if (leaving) {
+    clearTimeout(leaving);
+    leaving = null;
+  }
+  lastAnchor = anchor;
+  if (!panel.isVisible()) {
+    if (focus) panel.show();
+    else panel.showInactive();
+  }
+  applyPanelSize();
+  positionPanel(anchor);
+  if (focus) panel.focus();
+  panel.webContents.send('panel:enter', anchor);
+}
+
+/** Lets the renderer play its exit animation, then hides (with a fallback if it never answers). */
+function hidePanel(): void {
+  if (!panel || !panel.isVisible() || leaving) return;
+  panelHiddenAt = Date.now();
+  panel.webContents.send('panel:leave');
+  leaving = setTimeout(finishHide, 260);
+}
+
+function finishHide(): void {
+  if (leaving) clearTimeout(leaving);
+  leaving = null;
+  panel?.hide();
+  panelHiddenAt = Date.now();
+}
+
 function togglePanel(anchor: Anchor = 'pet'): void {
   if (!panel) return;
-  if (panel.isVisible()) {
-    panel.hide();
+  if (panel.isVisible() && !leaving) {
+    hidePanel();
     return;
   }
   if (Date.now() - panelHiddenAt < 300) return; // the click that blurred the panel
-  lastAnchor = anchor;
-  panel.show();
-  applyPanelSize();
-  positionPanel(anchor);
-  panel.focus();
+  showPanel(anchor);
 }
 
 function setPetsVisible(visible: boolean): void {
@@ -306,6 +338,18 @@ function menuTemplate(): MenuItemConstructorOptions[] {
     { label: t(L, 'tray.refresh'), click: () => void refreshAll() },
     { type: 'separator' },
     { label: t(L, petsVisible ? 'tray.hidePets' : 'tray.showPets'), click: () => setPetsVisible(!petsVisible) },
+    {
+      label: t(L, 'tray.showAgent', { agent: 'Claude' }),
+      type: 'checkbox',
+      checked: settings.get().showClaude,
+      click: (item) => applySettings({ showClaude: item.checked }),
+    },
+    {
+      label: t(L, 'tray.showAgent', { agent: 'Codex' }),
+      type: 'checkbox',
+      checked: settings.get().showCodex,
+      click: (item) => applySettings({ showCodex: item.checked }),
+    },
     {
       label: t(L, 'tray.launchAtLogin'),
       type: 'checkbox',
@@ -386,6 +430,8 @@ function registerIpc(): void {
       const r = await sub2apiLogin(netFetch, req.origin, req.email, req.password, totp);
       if (r.kind === 'totp') return { ok: false, error: '', needsTotp: true, tempToken: r.tempToken };
       sessions.set(req.origin, { email: r.email, ...r.tokens, keyIds: {} });
+      const skipped = settings.get().loginSkipped;
+      if (skipped.includes(req.origin)) settings.update({ loginSkipped: skipped.filter((o) => o !== req.origin) });
       void refreshAll();
       return { ok: true, email: r.email };
     } catch (e) {
@@ -398,7 +444,10 @@ function registerIpc(): void {
   });
 
   ipcMain.on('panel:toggle', () => togglePanel('pet'));
-  ipcMain.on('panel:hide', () => panel?.hide());
+  ipcMain.on('panel:hide', () => hidePanel());
+  ipcMain.on('panel:left', () => {
+    if (leaving) finishHide();
+  });
   ipcMain.on('panel:resize', (_e, height: number) => {
     panelHeight = height;
     if (panel?.isVisible()) {
@@ -455,15 +504,33 @@ async function capture(): Promise<void> {
     writeFileSync(path.join(CAPTURE_DIR, frames > 1 ? `pet-${String(i).padStart(3, '0')}.png` : 'pet.png'), img.toPNG());
     if (frames > 1) await wait(Number(process.env.QB_CAPTURE_INTERVAL || 120));
   }
-  lastAnchor = 'pet';
-  panel.showInactive();
-  applyPanelSize();
-  positionPanel('pet');
+  showPanel('pet', false);
   await wait(1500);
   const shot = await panel.webContents.capturePage();
   writeFileSync(path.join(CAPTURE_DIR, 'panel.png'), shot.toPNG());
+  for (const v of (process.env.QB_CAPTURE_VIEWS ?? '').split(',').filter(Boolean)) {
+    panel.webContents.send('panel:debug-view', v);
+    await wait(900);
+    applyPanelSize();
+    await wait(300);
+    writeFileSync(path.join(CAPTURE_DIR, `panel-${v}.png`), (await panel.webContents.capturePage()).toPNG());
+  }
   writeFileSync(path.join(CAPTURE_DIR, 'state.json'), JSON.stringify(state, null, 2));
   app.quit();
+}
+
+function pendingLogins(): string[] {
+  const skipped = new Set(settings.get().loginSkipped);
+  const origins = state.buddies.filter((b) => b.login && !b.login.loggedIn).map((b) => b.login!.origin);
+  return [...new Set(origins)].filter((o) => !skipped.has(o));
+}
+
+function maybeOnboard(): void {
+  if (demo || CAPTURE_DIR || process.env.QB_SELFTEST || settings.get().onboarded) return;
+  if (!pendingLogins().length) return;
+  settings.update({ onboarded: true });
+  // let the pets settle on screen first
+  setTimeout(() => showPanel('pet'), 1200);
 }
 
 // ------------------------------------------------------------------ lifecycle
@@ -475,7 +542,7 @@ app.on('window-all-closed', () => {
 
 app.whenReady().then(async () => {
   if (isMac) app.dock?.hide();
-  if (process.platform === 'win32') app.setAppUserModelId('io.github.quotabuddies.app');
+  if (process.platform === 'win32') app.setAppUserModelId('io.github.traveller2001.quotabuddy');
   const userData = app.getPath('userData');
   settings = new SettingsStore(path.join(userData, 'settings.json'));
   savedPosition = settings.get().petPosition;
@@ -501,10 +568,12 @@ app.whenReady().then(async () => {
   await refreshAll();
   schedule();
   void capture();
+  maybeOnboard();
   if (process.env.QB_SELFTEST && pet && panel) {
     void selfTest(pet, panel, (code) => {
       // keep the user's real settings untouched by the synthetic drag
       if (savedPosition) settings.update({ petPosition: savedPosition });
+      else settings.clearPetPosition();
       app.exit(code);
     });
   }

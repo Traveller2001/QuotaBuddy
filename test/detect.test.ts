@@ -163,6 +163,6 @@ HKEY_CURRENT_USER\\Environment
   const env = parseRegQuery(reg, { USERPROFILE: 'C:\\Users\\me' });
   assert.equal(env.ANTHROPIC_BASE_URL, 'https://r.example');
   assert.equal(env.OPENAI_HOME, 'C:\\Users\\me\\x');
-  const shell = parseShellEnv('motd junk\n__QUOTA_BUDDIES_ENV__\nA=1\nANTHROPIC_BASE_URL=https://x=y\n__QUOTA_BUDDIES_ENV__\n');
+  const shell = parseShellEnv('motd junk\n__QUOTABUDDY_ENV__\nA=1\nANTHROPIC_BASE_URL=https://x=y\n__QUOTABUDDY_ENV__\n');
   assert.deepEqual(shell, { A: '1', ANTHROPIC_BASE_URL: 'https://x=y' });
 });

@@ -11,10 +11,12 @@ export const DEFAULT_SETTINGS: Settings = {
   refreshSeconds: 60,
   launchAtLogin: false,
   thresholds: DEFAULT_THRESHOLDS,
+  loginSkipped: [],
+  onboarded: false,
 };
 
 export function sanitize(input: any, base: Settings = DEFAULT_SETTINGS): Settings {
-  const s: Settings = { ...base, thresholds: { ...base.thresholds } };
+  const s: Settings = { ...base, thresholds: { ...base.thresholds }, loginSkipped: [...base.loginSkipped] };
   if (!input || typeof input !== 'object') return s;
   if ([1, 2, 3].includes(input.scale)) s.scale = input.scale;
   if (typeof input.showClaude === 'boolean') s.showClaude = input.showClaude;
@@ -25,6 +27,11 @@ export function sanitize(input: any, base: Settings = DEFAULT_SETTINGS): Setting
   if (input.petPosition && Number.isFinite(input.petPosition.x) && Number.isFinite(input.petPosition.y)) {
     s.petPosition = { x: Math.round(input.petPosition.x), y: Math.round(input.petPosition.y) };
   }
+  if (Array.isArray(input.loginSkipped)) {
+    const origins: string[] = input.loginSkipped.filter((o: unknown): o is string => typeof o === 'string');
+    s.loginSkipped = [...new Set(origins)].slice(0, 20);
+  }
+  if (typeof input.onboarded === 'boolean') s.onboarded = input.onboarded;
   const t = input.thresholds;
   if (t && typeof t === 'object') {
     for (const k of ['energetic', 'relaxed', 'tired', 'anxious'] as const) {
@@ -49,6 +56,14 @@ export class SettingsStore {
 
   get(): Settings {
     return this.value;
+  }
+
+  /** Forget a saved pet position (back to the default corner). */
+  clearPetPosition(): void {
+    const { petPosition: _drop, ...rest } = this.value;
+    this.value = sanitize(rest);
+    mkdirSync(path.dirname(this.file), { recursive: true });
+    writeFileSync(this.file, JSON.stringify(this.value, null, 2));
   }
 
   update(patch: Partial<Settings>): Settings {

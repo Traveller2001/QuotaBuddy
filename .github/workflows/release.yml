@@ -37,7 +37,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
         with:
-          name: quota-buddies-${{ matrix.os }}
+          name: QuotaBuddy-${{ matrix.os }}
           path: |
             release/*.exe
             release/*.dmg

@@ -1,4 +1,4 @@
-# 额度小伙伴 · Quota Buddies
+# QuotaBuddy · 额度小伙伴
 
 住在桌面角落的两只像素小伙伴：一只 Claude（Clawd），一只 GPT。它们会自动读取你本机的 **Claude Code** 和 **Codex** 配置，查询上游还剩多少额度，然后用心情表现出来：额度充足时蹦蹦跳跳，快用完时冒汗发慌，用光了就趴在地上睡觉，等下一次刷新。
 
@@ -21,10 +21,11 @@
   | 3–15% | 焦虑 | 发抖、感叹号、狂冒汗 |
   | < 3% | 累瘫了 | 趴下、XX 眼、Zzz |
 
-- **刷新倒计时**：小伙伴脚下的像素条会显示剩余比例和下一次刷新（例如 `↻1h23m +18%`），下次刷新能恢复的格子会闪烁提示。面板里能看到每个窗口（5h / 7d / 每日 / 总额度……）的用量、重置时间，以及 Sub2API 号池的完整刷新计划。
+- **按紧急程度显示额度**：平时小伙伴脚下只显示最紧张的那个窗口（例如 `5h ▮▮▮▮▯▯▯▯ 48% ↻22m +18%`）；一旦剩余低于 35%，会把 5h、7d 等所有限制窗口都展开，各自带恢复倒计时，一眼就能看出是要等几小时还是几天。下次刷新能恢复的格子会闪烁提示。
+- **面板**：每只小伙伴一张卡片，显示各窗口的剩余比例、「即将恢复」时间线（什么时候、恢复多少、哪些账号回来）和今日用量；数字和进度条变化有过渡动画，打开和关闭都有动效。
 - **桌面宠物交互**：除了小伙伴本身，窗口其他区域都是鼠标穿透的。拖动可以移动位置，单击打开面板，双击立即刷新，右键弹出菜单；悬停会冒出详细信息的气泡，平时也会自言自语。
-- **托盘 / 菜单栏**：Windows 托盘提示里显示各自余量；macOS 菜单栏图标旁边直接显示最低余量。
-- 中文 / English 界面，像素字体，1x / 2x / 3x 三档大小，支持开机启动。
+- **托盘 / 菜单栏**：Windows 托盘提示里显示各自余量；macOS 菜单栏图标旁边直接显示最低余量。右键菜单和托盘菜单可以单独显示 / 隐藏 Claude 或 Codex。
+- **设置**：点头像选择桌面上显示哪几只、大小（小 / 中 / 大）、语言、刷新间隔、开机启动、演示模式，以及 Sub2API 账号管理。
 
 ## 支持的上游
 
@@ -32,7 +33,7 @@
 | --- | --- | --- |
 | **Claude Pro / Max 订阅** | `~/.claude/.credentials.json`，macOS 读钥匙串 `Claude Code-credentials` | 5h / 7d 用量与重置时间（另有 Opus、Sonnet 周限额，仅展示） |
 | **ChatGPT 登录的 Codex** | `~/.codex/auth.json` 里的 `tokens` | 主窗口和次窗口的用量与重置时间；接口不可用时退回读取最近一次 Codex 会话日志里的限额快照 |
-| **[Sub2API](https://github.com/Wei-Shaw/sub2api) 中转** | `GET /v1/usage` 返回 Sub2API 格式 | Key 的余额、总额度、5h/1d/7d 限速和今日用量；**在面板里登录账号后**，还能看到号池的 5h / 7d 用量、下一次恢复的时间和比例，以及刷新计划 |
+| **[Sub2API](https://github.com/Wei-Shaw/sub2api) 中转** | `GET /v1/usage` 返回 Sub2API 格式 | Key 的余额、总额度、5h/1d/7d 限速和今日用量；**登录账号后**还能看到号池的 5h / 7d 用量、下一次恢复的时间和比例，以及刷新计划。第一次启动会单独弹出登录页（可跳过），之后在「设置 → 账号」里管理 |
 | **one-api / new-api 等中转** | `/v1/dashboard/billing/*` | 总额度用量 |
 | 按量计费的 API Key（Anthropic / OpenAI / Bedrock / Vertex） | 官方地址加 API Key | 没有额度窗口，小伙伴会一直很开心 |
 
@@ -40,8 +41,8 @@
 
 从 [Releases](../../releases) 下载对应平台的安装包：
 
-- **Windows**：`Quota Buddies Setup x.y.z.exe`（安装版）或 `Quota Buddies x.y.z.exe`（免安装版）。
-- **macOS**：`.dmg`（arm64 和 x64 各一个）。安装包没有签名，第一次打开时请在「应用程序」里**右键 → 打开**；或者执行 `xattr -dr com.apple.quarantine "/Applications/Quota Buddies.app"`。
+- **Windows**：`QuotaBuddy Setup x.y.z.exe`（安装版）或 `QuotaBuddy x.y.z.exe`（免安装版）。
+- **macOS**：`.dmg`（arm64 和 x64 各一个）。安装包没有签名，第一次打开时请在「应用程序」里**右键 → 打开**；或者执行 `xattr -dr com.apple.quarantine "/Applications/QuotaBuddy.app"`。
 - **Linux**：`.AppImage`。
 
 从源码运行（需要 Node.js 22+）：
@@ -55,6 +56,8 @@ npm run dist       # 打包当前平台的安装包到 release/
 ```
 
 > 国内网络可以先设置 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 再安装依赖。
+
+排查问题时可以用 `QB_DEBUG=1 npm start` 启动，终端里会打印上游返回的原始用量数据（不包含任何凭据）。
 
 ## 隐私与安全
 

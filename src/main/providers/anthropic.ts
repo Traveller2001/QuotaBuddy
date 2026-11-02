@@ -20,7 +20,7 @@ export async function fetchClaudeSubscription(f: FetchFn, oauth: ClaudeOAuth, no
         Authorization: `Bearer ${oauth.accessToken}`,
         'anthropic-beta': 'oauth-2025-04-20',
         Accept: 'application/json',
-        'User-Agent': 'quota-buddies',
+        'User-Agent': 'QuotaBuddy',
       },
     });
   } catch (e) {

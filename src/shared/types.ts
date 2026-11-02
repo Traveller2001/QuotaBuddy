@@ -93,6 +93,10 @@ export interface Settings {
   launchAtLogin: boolean;
   petPosition?: { x: number; y: number };
   thresholds: Thresholds;
+  /** Sub2API origins the user chose not to log in to (no onboarding prompt for them). */
+  loginSkipped: string[];
+  /** Set once the first-run login screen has been offered. */
+  onboarded: boolean;
 }
 
 export interface AppState {

@@ -11,7 +11,7 @@ export const MOOD_COLORS: Record<Mood, string> = {
   exhausted: '#ff5a5a',
 };
 
-export const AGENT_COLORS = { claude: '#d97757', codex: '#2cc197' } as const;
+export const AGENT_COLORS = { claude: '#e07a55', codex: '#d9dbe3' } as const;
 
 export function esc(s: unknown): string {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

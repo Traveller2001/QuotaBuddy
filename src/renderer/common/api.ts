@@ -1,9 +1,9 @@
-import type { QuotaBuddiesApi } from '../../preload/preload';
+import type { QuotaBuddyApi } from '../../preload/preload';
 
 declare global {
   interface Window {
-    qb: QuotaBuddiesApi;
+    qb: QuotaBuddyApi;
   }
 }
 
-export const qb = (): QuotaBuddiesApi => window.qb;
+export const qb = (): QuotaBuddyApi => window.qb;

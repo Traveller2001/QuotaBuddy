@@ -1,16 +1,62 @@
-import { formatPercent } from '../../shared/format';
-import { bubbleLines, t } from '../../shared/i18n';
-import type { AgentId, AppState, BuddySnapshot, Locale, Mood } from '../../shared/types';
+import { formatDuration, formatPercent } from '../../shared/format';
+import { hudRows, type WindowView } from '../../shared/hud';
+import { bubbleLines, hasKey, t } from '../../shared/i18n';
+import { moodFor } from '../../shared/mood';
+import type { AgentId, AppState, BuddySnapshot, Locale, Mood, Thresholds } from '../../shared/types';
 import { qb } from '../common/api';
 import { maxFrame, spriteMeta, SpriteAnimator } from '../common/sprites';
-import { compactRefill, hudWindow, MOOD_COLORS, refillSentence, remainingText, windowLabel } from '../common/view';
+import { MOOD_COLORS, windowLabel } from '../common/view';
 
-const SEGMENTS = 10;
+const SEGMENTS = 8;
 const stage = document.getElementById('stage')!;
 let state: AppState | null = null;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
+const shortLabel = (L: Locale, id: string) => (hasKey(`short.${id}`) ? t(L, `short.${id}`) : id);
+
+/** One meter row: [5h] ▮▮▮▮▯▯▯▯ 40% 3h29m */
+class MeterRow {
+  readonly el: HTMLDivElement;
+  private tag: HTMLSpanElement;
+  private segs: HTMLElement[];
+  private pct: HTMLSpanElement;
+  private cd: HTMLSpanElement;
+  refillAt?: string;
+
+  constructor(readonly id: string) {
+    this.el = document.createElement('div');
+    this.el.className = 'row enter';
+    this.el.innerHTML = `<span class="tag"></span><div class="meter">${'<i></i>'.repeat(SEGMENTS)}</div><span class="pct"></span><span class="cd"></span>`;
+    this.tag = this.el.querySelector('.tag')!;
+    this.segs = [...this.el.querySelectorAll<HTMLElement>('.meter i')];
+    this.pct = this.el.querySelector('.pct')!;
+    this.cd = this.el.querySelector('.cd')!;
+    this.el.addEventListener('animationend', () => this.el.classList.remove('enter'), { once: true });
+  }
+
+  set(tag: string, remaining: number | null, color: string, refill: number | undefined, text: string, refillAt?: string): void {
+    this.tag.textContent = tag;
+    this.tag.hidden = !tag;
+    this.el.style.setProperty('--fill', color);
+    const value = remaining === null ? 100 : remaining;
+    const lit = value <= 0 ? 0 : Math.max(1, Math.round((value / 100) * SEGMENTS));
+    // Segments the next refill brings back blink: the refresh schedule is part of the meter.
+    const soon = refill ? Math.min(SEGMENTS - lit, Math.round((Math.min(100, value + refill) - value) / (100 / SEGMENTS))) : 0;
+    this.segs.forEach((seg, i) => {
+      seg.classList.toggle('on', i < lit);
+      seg.classList.toggle('soon', i >= lit && i < lit + soon);
+    });
+    this.pct.textContent = text;
+    this.refillAt = refillAt;
+  }
+
+  tick(now: number, showCountdown: boolean): void {
+    const left = this.refillAt ? Date.parse(this.refillAt) - now : 0;
+    this.cd.textContent = showCountdown && left > 0 ? formatDuration(left) : '';
+    this.cd.hidden = !this.cd.textContent;
+  }
+}
 
 class BuddyView {
   readonly root: HTMLDivElement;
@@ -18,11 +64,14 @@ class BuddyView {
   private stand: HTMLDivElement;
   private anim: SpriteAnimator;
   private bubble: HTMLDivElement;
-  private meter: HTMLDivElement;
-  private pct: HTMLSpanElement;
-  private refill: HTMLDivElement;
+  private rowsEl: HTMLDivElement;
+  private sub: HTMLDivElement;
+  private rows = new Map<string, MeterRow>();
+  private urgent = false;
+  private lead: WindowView | undefined;
   private snap: BuddySnapshot | null = null;
   private locale: Locale = 'en';
+  private thresholds: Thresholds | null = null;
   private mood: Mood | null = null;
   private hovered = false;
   private bubbleUntil = 0;
@@ -34,19 +83,14 @@ class BuddyView {
     this.root.dataset.agent = agent;
     this.root.innerHTML = `
       <div class="stand"><div class="bubble"></div><canvas class="sprite hit"></canvas></div>
-      <div class="hud hit">
-        <div class="hud-row"><div class="meter">${'<i></i>'.repeat(SEGMENTS)}</div><span class="pct"></span></div>
-        <div class="refill"></div>
-      </div>`;
+      <div class="hud hit"><div class="rows"></div><div class="sub"></div></div>`;
     this.stand = this.root.querySelector('.stand')!;
     this.canvas = this.root.querySelector('canvas')!;
     this.bubble = this.root.querySelector('.bubble')!;
-    this.meter = this.root.querySelector('.meter')!;
-    this.pct = this.root.querySelector('.pct')!;
-    this.refill = this.root.querySelector('.refill')!;
+    this.rowsEl = this.root.querySelector('.rows')!;
+    this.sub = this.root.querySelector('.sub')!;
     this.anim = new SpriteAnimator(this.canvas, agent, scale);
     this.layout(scale);
-
     for (const el of this.root.querySelectorAll<HTMLElement>('.hit')) {
       el.addEventListener('pointerenter', () => this.hover(true));
       el.addEventListener('pointerleave', () => this.hover(false));
@@ -62,28 +106,57 @@ class BuddyView {
     this.canvas.style.marginBottom = `${(max.below - (m.frameHeight - m.groundY)) * scale}px`;
   }
 
-  update(b: BuddySnapshot, locale: Locale): void {
+  private row(id: string): MeterRow {
+    let r = this.rows.get(id);
+    if (!r) {
+      r = new MeterRow(id);
+      this.rows.set(id, r);
+    }
+    return r;
+  }
+
+  update(b: BuddySnapshot, locale: Locale, thresholds: Thresholds): void {
     const first = this.snap === null;
     this.snap = b;
     this.locale = locale;
+    this.thresholds = thresholds;
     this.root.classList.toggle('error', b.status === 'error');
     this.root.classList.toggle('unconfigured', b.status === 'unconfigured');
     const mood: Mood = b.status === 'unconfigured' ? 'exhausted' : b.mood;
     this.root.classList.toggle('anxious', mood === 'anxious' && b.status === 'ok');
     this.anim.setMood(mood);
 
-    const color = b.status === 'ok' ? MOOD_COLORS[mood] : '#8d8a9e';
-    this.root.style.setProperty('--fill', color);
-    const remaining = b.status !== 'ok' ? 0 : b.remainingPercent === null ? 100 : b.remainingPercent;
-    const lit = remaining <= 0 ? 0 : Math.max(1, Math.round((remaining / 100) * SEGMENTS));
-    // Segments the next refill will bring back blink, so the refresh schedule is part of the meter.
-    const restore = b.status === 'ok' && b.remainingPercent !== null ? b.nextRefresh?.restorePercent ?? 0 : 0;
-    const soon = Math.min(SEGMENTS - lit, Math.round(((Math.min(100, remaining + restore) - remaining) / 100) * SEGMENTS));
-    this.meter.querySelectorAll('i').forEach((seg, i) => {
-      seg.classList.toggle('on', i < lit);
-      seg.classList.toggle('soon', i >= lit && i < lit + soon);
-    });
-    this.pct.textContent = remainingText(b);
+    // Which rows: the tightest window normally, every limiting window when things get tight.
+    const wanted: MeterRow[] = [];
+    if (b.status !== 'ok') {
+      wanted.push(this.row('status'));
+      wanted[0].set('', 0, '#8d8a9e', undefined, b.status === 'error' ? '?' : '-');
+      this.urgent = false;
+      this.lead = undefined;
+    } else {
+      const { urgent, rows } = hudRows(b, thresholds);
+      this.urgent = urgent;
+      this.lead = rows[0];
+      if (!rows.length) {
+        const r = this.row('none');
+        r.set('', null, MOOD_COLORS[mood], undefined, '∞');
+        wanted.push(r);
+      }
+      for (const w of rows) {
+        const r = this.row(w.id);
+        r.set(shortLabel(locale, w.id), w.remaining, MOOD_COLORS[moodFor(w.remaining, thresholds)], w.refill, `${formatPercent(w.remaining)}%`, w.refillAt);
+        wanted.push(r);
+      }
+    }
+    const keep = new Set(wanted);
+    for (const [id, r] of this.rows) {
+      if (!keep.has(r)) {
+        r.el.remove();
+        this.rows.delete(id);
+      }
+    }
+    wanted.forEach((r) => this.rowsEl.appendChild(r.el));
+    this.root.classList.toggle('urgent', this.urgent);
     this.tick(Date.now());
 
     if (!first && this.mood !== mood && b.status === 'ok') {
@@ -96,6 +169,14 @@ class BuddyView {
     if (this.hovered) this.showHoverLine();
   }
 
+  private refillText(w: WindowView | undefined, now = Date.now()): string | null {
+    if (!w?.refillAt) return null;
+    const left = Date.parse(w.refillAt) - now;
+    if (left <= 0) return null;
+    const pct = w.refill ? Math.round(w.refill) : 0;
+    return pct ? t(this.locale, 'ui.restoreIn', { time: formatDuration(left), pct }) : t(this.locale, 'ui.resetsIn', { time: formatDuration(left) });
+  }
+
   private hoverLine(): string {
     const b = this.snap;
     const L = this.locale;
@@ -103,19 +184,21 @@ class BuddyView {
     const name = t(L, `agent.${b.agent}`);
     if (b.status === 'unconfigured') return `${name}: ${t(L, 'ui.unconfigured')}`;
     if (b.status === 'error') return `${name}: ${b.error ?? t(L, 'ui.error')}`;
-    const w = hudWindow(b);
-    const head = w
-      ? `${windowLabel(L, w)} ${t(L, 'ui.remaining')} ${formatPercent(100 - w.usedPercent)}%`
-      : t(L, 'ui.noLimit');
-    const refill = refillSentence(L, b.nextRefresh);
-    const login = b.login && !b.login.loggedIn && b.windows.length === 0 ? ` · ${t(L, 'ui.login')}?` : '';
-    return `${name} · ${t(L, `mood.${b.mood}`)}\n${head}${refill ? ` · ${refill}` : ''}${login}`;
+    const { rows } = hudRows(b, this.thresholds!);
+    const lines = rows.length ? [] : [t(L, 'ui.noLimit')];
+    // the hover shows every window, not just the ones in the compact meter
+    const all = hudRows(b, { ...this.thresholds!, relaxed: 101 }).rows;
+    for (const w of all) {
+      const refill = this.refillText(w);
+      lines.push(`${windowLabel(L, { id: w.id, label: w.label } as any)} ${formatPercent(w.remaining)}%${refill ? ` · ${refill}` : ''}`);
+    }
+    return `${name} · ${t(L, `mood.${b.mood}`)}\n${lines.join('\n')}`;
   }
 
   private chatLine(): string {
     const b = this.snap!;
     const L = this.locale;
-    const refill = refillSentence(L, b.nextRefresh);
+    const refill = this.refillText(this.lead);
     const pct = b.remainingPercent === null ? '100' : formatPercent(b.remainingPercent);
     const lines = bubbleLines(L, b.mood).filter((l) => refill || !l.includes('{refill}'));
     return pick(lines).replace('{pct}', pct).replace('{refill}', refill ?? '');
@@ -142,7 +225,11 @@ class BuddyView {
   tick(now: number): void {
     const b = this.snap;
     if (!b) return;
-    this.refill.textContent = b.status === 'ok' ? compactRefill(b.nextRefresh, now) : '';
+    for (const r of this.rows.values()) r.tick(now, this.urgent);
+    // calm: one line under the meter says when the tightest window refills
+    const sub = !this.urgent && b.status === 'ok' && this.lead?.refillAt ? Date.parse(this.lead.refillAt) - now : 0;
+    this.sub.textContent = sub > 0 ? `↻${formatDuration(sub)}${this.lead?.refill ? ` +${Math.round(this.lead.refill)}%` : ''}` : '';
+    this.sub.hidden = !this.sub.textContent;
     if (!this.hovered && this.bubbleUntil && now > this.bubbleUntil) {
       this.bubble.classList.remove('show');
       this.bubbleUntil = 0;
@@ -187,7 +274,7 @@ function render(): void {
     }
     stage.appendChild(view.root); // keeps DOM order == list order
     view.layout(scale);
-    view.update(b, state.locale);
+    view.update(b, state.locale, state.settings.thresholds);
   }
   reportSize();
 }

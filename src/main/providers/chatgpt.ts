@@ -23,7 +23,7 @@ export async function fetchChatGPTUsage(f: FetchFn, auth: ChatGPTAuth, now = Dat
         Authorization: `Bearer ${auth.accessToken}`,
         ...(auth.accountId ? { 'ChatGPT-Account-Id': auth.accountId } : {}),
         Accept: 'application/json',
-        'User-Agent': 'codex_cli_rs (quota-buddies)',
+        'User-Agent': 'codex_cli_rs (QuotaBuddy)',
         originator: 'codex_cli_rs',
       },
     });

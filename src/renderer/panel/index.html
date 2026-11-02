@@ -8,20 +8,31 @@
     />
     <link rel="stylesheet" href="base.css" />
     <link rel="stylesheet" href="panel.css" />
-    <title>Quota Buddies</title>
+    <title>QuotaBuddy</title>
   </head>
   <body>
     <div id="root">
-      <header>
-        <span class="title" id="title"></span>
-        <span class="spacer"></span>
-        <button class="icon" id="btn-refresh">↻</button>
-        <button class="icon" id="btn-settings">⚙</button>
-        <button class="icon" id="btn-close">×</button>
+      <header id="header">
+        <div class="brand"><img class="logo" src="../../assets/icons/tray@2x.png" alt="" /><span id="title">QuotaBuddy</span></div>
+        <nav class="tabs" id="tabs" role="tablist">
+          <button role="tab" data-view="overview"></button>
+          <button role="tab" data-view="settings"></button>
+          <i class="ink"></i>
+        </nav>
+        <div class="actions">
+          <button class="icon-btn" id="btn-refresh"><span class="glyph">↻</span></button>
+          <button class="icon-btn" id="btn-close"><span class="glyph">✕</span></button>
+        </div>
       </header>
-      <main id="cards"></main>
-      <section id="settings" hidden></section>
-      <footer id="footer"></footer>
+      <div id="views">
+        <section class="view" id="view-login" data-view="login"></section>
+        <section class="view" id="view-overview" data-view="overview"></section>
+        <section class="view" id="view-settings" data-view="settings"></section>
+      </div>
+      <footer id="footer">
+        <span><span id="version"></span> · <button class="link" id="btn-github">GitHub ↗</button></span>
+        <span id="updated"></span>
+      </footer>
     </div>
     <script src="panel.js"></script>
   </body>

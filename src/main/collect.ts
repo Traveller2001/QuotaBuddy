@@ -4,7 +4,7 @@ import type { ClaudeDetection } from './detect/claude';
 import type { CodexDetection } from './detect/codex';
 import { fetchClaudeSubscription, TokenExpiredError } from './providers/anthropic';
 import { fetchChatGPTUsage, latestSessionSnapshot } from './providers/chatgpt';
-import { errorText, HttpError, type FetchFn, type Parts } from './providers/http';
+import { debug, errorText, HttpError, type FetchFn, type Parts } from './providers/http';
 import { fetchOpenAIBilling } from './providers/relay';
 import {
   fetchKeyUsage,
@@ -66,7 +66,9 @@ async function poolParts(ctx: CollectContext, origin: string, apiKey: string): P
       ctx.sessions.rememberKeyId(origin, apiKey, found);
       id = found;
     }
-    return parsePool(await fetchPoolUsage(ctx.fetch, origin, session.accessToken, id));
+    const summary = await fetchPoolUsage(ctx.fetch, origin, session.accessToken, id);
+    debug(`pool ${origin} key#${id}`, summary);
+    return parsePool(summary);
   };
   try {
     return await run();
@@ -104,6 +106,7 @@ async function collectRelay(agent: AgentId, baseUrl: string, key: string | undef
   }
 
   if (usage) {
+    debug(`key usage ${origin}`, { ...usage, daily_usage: undefined, model_stats: undefined });
     d.source.kind = 'sub2api';
     merge(d, parseKeyUsage(usage));
     const session = ctx.sessions.get(origin);

@@ -72,3 +72,8 @@ export function errorText(err: unknown): string {
   }
   return String(err);
 }
+
+/** QB_DEBUG=1 prints raw upstream payloads (never credentials) to help diagnose odd numbers. */
+export function debug(label: string, data: unknown): void {
+  if (process.env.QB_DEBUG) console.log(`[debug] ${label}`, JSON.stringify(data));
+}

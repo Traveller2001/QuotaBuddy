@@ -15,6 +15,23 @@ const api = {
   setDemo: (on: boolean): Promise<void> => ipcRenderer.invoke('demo:set', on),
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   hidePanel: () => ipcRenderer.send('panel:hide'),
+  panelLeft: () => ipcRenderer.send('panel:left'),
+  /** capture mode only: switch the visible panel view */
+  onDebugView: (cb: (view: string) => void) => {
+    const handler = (_e: unknown, v: string) => cb(v);
+    ipcRenderer.on('panel:debug-view', handler);
+    return () => ipcRenderer.off('panel:debug-view', handler);
+  },
+  onPanelEnter: (cb: (anchor: 'pet' | 'tray') => void) => {
+    const handler = (_e: unknown, anchor: 'pet' | 'tray') => cb(anchor);
+    ipcRenderer.on('panel:enter', handler);
+    return () => ipcRenderer.off('panel:enter', handler);
+  },
+  onPanelLeave: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('panel:leave', handler);
+    return () => ipcRenderer.off('panel:leave', handler);
+  },
   resizePanel: (height: number) => ipcRenderer.send('panel:resize', height),
   resizePet: (width: number, height: number) => ipcRenderer.send('pet:resize', width, height),
   setIgnoreMouse: (ignore: boolean) => ipcRenderer.send('pet:ignore-mouse', ignore),
@@ -23,6 +40,6 @@ const api = {
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
 };
 
-export type QuotaBuddiesApi = typeof api;
+export type QuotaBuddyApi = typeof api;
 
 contextBridge.exposeInMainWorld('qb', api);

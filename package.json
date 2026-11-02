@@ -1,8 +1,13 @@
 {
-  "name": "quota-buddies",
+  "name": "quotabuddy",
   "version": "0.1.0",
   "description": "Pixel desktop pets that show how much Claude Code / Codex quota you have left.",
-  "author": "quota-buddies contributors",
+  "homepage": "https://github.com/Traveller2001/QuotaBuddy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Traveller2001/QuotaBuddy.git"
+  },
+  "author": "Traveller2001",
   "license": "MIT",
   "private": true,
   "main": "dist/main/main.js",
@@ -26,8 +31,8 @@
     "typescript": "^7.0.2"
   },
   "build": {
-    "appId": "io.github.quotabuddies.app",
-    "productName": "Quota Buddies",
+    "appId": "io.github.traveller2001.quotabuddy",
+    "productName": "QuotaBuddy",
     "directories": {
       "output": "release",
       "buildResources": "build"

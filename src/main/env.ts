@@ -53,7 +53,7 @@ async function windowsRegistryEnv(): Promise<Env> {
   return { ...machine, ...user };
 }
 
-const MARKER = '__QUOTA_BUDDIES_ENV__';
+const MARKER = '__QUOTABUDDY_ENV__';
 
 export function parseShellEnv(stdout: string): Env {
   const start = stdout.indexOf(MARKER);
