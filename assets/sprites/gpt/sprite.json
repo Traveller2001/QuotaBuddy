@@ -1,0 +1,28 @@
+{
+  "character": "gpt",
+  "frameWidth": 70,
+  "frameHeight": 74,
+  "groundY": 71,
+  "moods": {
+    "energetic": {
+      "file": "energetic.png",
+      "frames": 4
+    },
+    "relaxed": {
+      "file": "relaxed.png",
+      "frames": 4
+    },
+    "tired": {
+      "file": "tired.png",
+      "frames": 4
+    },
+    "anxious": {
+      "file": "anxious.png",
+      "frames": 4
+    },
+    "exhausted": {
+      "file": "exhausted.png",
+      "frames": 4
+    }
+  }
+}

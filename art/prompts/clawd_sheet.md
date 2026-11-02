@@ -1,0 +1,12 @@
+Use the attached image only as the CHARACTER REFERENCE: keep exactly the same character design (wide terracotta-orange rectangular body, two black eyes, stubby side arms, four short darker legs, light highlight pixels on the top-left corner, pink blush), the same palette and the same chunky pixel scale.
+
+Create a NEW pixel-art sprite sheet arranged as a strict grid of 5 rows x 4 columns (20 frames). Every cell is the same size; the character is centered horizontally in its cell and stands on the same invisible ground line near the bottom of the cell. Every frame uses the exact same pixel scale and the same body size. Each row is one looping animation (frame 4 loops back to frame 1). Large empty gaps between cells; nothing touches or crosses into another cell.
+
+Row 1 - ENERGETIC (quota is plentiful): 1) crouching, ready to jump, happy ^ ^ eyes; 2) jumping up with both arms raised; 3) top of the jump with small yellow pixel sparkle stars around it; 4) landing with a happy squash.
+Row 2 - RELAXED (quota is fine): 1) standing calmly, normal black vertical eyes; 2) body one pixel higher (breathing); 3) blink - eyes closed as short horizontal lines; 4) standing calmly with a tiny pixel music note floating beside the head.
+Row 3 - TIRED (quota getting low): 1) droopy half-closed eyes, arms hanging down, one light-blue sweat drop on the side of the head; 2) whole body sags one pixel lower; 3) yawning with a small dark open mouth; 4) droopy again, the sweat drop slid a bit lower.
+Row 4 - ANXIOUS (quota almost gone): 1) wide panicked eyes (white eyes with tiny black pupils), several light-blue sweat drops, a red pixel exclamation mark above the head; 2) trembling shifted slightly left, arms flailing up; 3) trembling shifted slightly right, arms down; 4) wavy worried mouth, sweat drops flying off.
+Row 5 - EXHAUSTED (quota used up, waiting for refresh): the character has collapsed flat on the ground, body squashed lower and wider, legs splayed out, eyes drawn as X X; 1) collapsed; 2) collapsed with a small pixel "z" above; 3) with "z Z"; 4) with "z Z z" floating up.
+
+Style: true pixel art, crisp hard square pixels, no anti-aliasing, no blur, no gradients, limited palette (max 12 colors), no outlines unless they are part of the reference.
+Background: the ENTIRE canvas is one flat solid pure magenta #FF00FF (it will be chroma-keyed out). No white background, no shadows, no ground line, no grid lines, no cell borders, no text or labels except the small "z" letters in row 5.

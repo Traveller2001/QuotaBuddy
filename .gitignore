@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-test/
+release/
+art/raw/*.log
+art/tools/__pycache__/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

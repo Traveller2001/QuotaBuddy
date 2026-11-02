@@ -1,0 +1,16 @@
+Two reference images are attached.
+- Image 1 is the CHARACTER: a chibi pixel-art creature whose body is the OpenAI / ChatGPT knot logo (a rounded hexagonal rosette of six interlocking swirling loops) in charcoal black (#202123 main body colour) with crisp white (#FFFFFF) swirl lines exactly like the original black-and-white OpenAI logo, plus a thin light-grey (#C9CBD1) one-pixel outer outline so it stays visible on dark backgrounds, with a FACE PATCH: the centre of the knot is a solid white rounded face patch (about one third of the body width) on which the two small vertical black eyes, the mouth and the pink blush are drawn, so the face is always easy to read; the white swirl arms wrap around this face patch on the charcoal body, stubby side arms and four short legs. Keep this character design exactly: same swirl pattern, same colours, same proportions, same chunky pixel scale.
+- Image 2 is the LAYOUT and ANIMATION reference: a 5 rows x 4 columns sprite sheet of a different character. Copy its layout, poses, facial expressions and effects row by row, frame by frame, but draw the character from Image 1 instead. Do not draw the orange character from Image 2.
+
+Face rule: all facial features (eyes, ^ ^ eyes, closed-eye lines, X X eyes, mouths, blush) are drawn in black / pink INSIDE the white face patch in every frame. The panicked eyes in row 4 are big white eyes with a black outline and tiny black pupils.
+
+Output: a pixel-art sprite sheet, a strict grid of 5 rows x 4 columns (20 frames). Every cell the same size; the character centred in its cell standing on the same invisible ground line near the bottom of the cell; the same pixel scale and body size in every frame. Each row is a looping animation. Large empty gaps between cells; nothing touches or crosses into another cell.
+
+Row 1 - ENERGETIC: 1) crouching, ready to jump, happy ^ ^ eyes; 2) jumping up with both arms raised; 3) top of the jump with small yellow pixel sparkle stars around it; 4) landing with a happy squash.
+Row 2 - RELAXED: 1) standing calmly, normal black vertical eyes, small smile; 2) body one pixel higher (breathing); 3) blink - eyes closed as short horizontal lines; 4) standing calmly with a tiny yellow pixel music note floating beside the head.
+Row 3 - TIRED: 1) droopy half-closed eyes, arms hanging down, one light-blue sweat drop on the side of the head; 2) whole body sags one pixel lower; 3) yawning with a small dark open mouth; 4) droopy again, the sweat drop slid a bit lower.
+Row 4 - ANXIOUS: 1) wide panicked eyes (white eyes with tiny black pupils), several light-blue sweat drops, a red pixel exclamation mark above the head; 2) trembling shifted slightly left, arms flailing up; 3) trembling shifted slightly right, arms down; 4) wavy worried mouth, sweat drops flying off.
+Row 5 - EXHAUSTED: collapsed flat on the ground, body squashed lower and wider, legs splayed, eyes drawn as X X; 1) collapsed; 2) with a small yellow pixel "z" above; 3) with "z Z"; 4) with "z Z z" floating up.
+
+Style: true pixel art, crisp hard square pixels, no anti-aliasing, no blur, no gradients, limited palette (max 14 colours).
+Background: the ENTIRE canvas is one flat solid pure magenta #FF00FF. No white background, no shadows, no ground line, no grid lines, no cell borders, no text except the small "z" letters in row 5.

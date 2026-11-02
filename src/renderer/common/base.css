@@ -1,0 +1,44 @@
+@font-face {
+  font-family: 'Fusion Pixel';
+  src: url('../../assets/fonts/fusion-pixel-12px.woff2') format('woff2');
+  font-display: block;
+}
+
+:root {
+  --px: 2px;
+  --ink: #f4f1ff;
+  --ink-dim: #a9a6bf;
+  --shadow: #15141c;
+  --font: 'Fusion Pixel', 'Microsoft YaHei', 'PingFang SC', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  user-select: none;
+  overflow: hidden;
+}
+
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
