@@ -24,6 +24,19 @@ SEQUENCES = {
     "anxious": [(0, 120), (1, 110), (2, 110), (1, 110), (2, 110), (3, 220)],
     "exhausted": [(0, 1000), (1, 900), (2, 900), (3, 1300)],
 }
+# mood colours and a typical remaining percentage, keep in sync with src/renderer/common/view.ts
+COLORS = {
+    "energetic": (79, 224, 122),
+    "relaxed": (166, 224, 90),
+    "tired": (242, 201, 76),
+    "anxious": (255, 145, 66),
+    "exhausted": (255, 90, 90),
+}
+LEVELS = {"energetic": 88, "relaxed": 48, "tired": 24, "anxious": 8, "exhausted": 0}
+BG = (32, 30, 44, 255)
+CARD = (42, 40, 58, 255)
+EDGE = (11, 10, 16, 255)
+SEGMENTS = 8
 SCALE = 2
 STEP_MS = 50
 TOTAL_MS = 5550
@@ -56,23 +69,36 @@ def main() -> None:
     ground_h = max(m["groundY"] for _, m, _ in chars) * SCALE
     below = max(m["frameHeight"] - m["groundY"] for _, m, _ in chars) * SCALE
     row_h = ground_h + below + 10
-    top = 62
+    top = 70
+    meter_h = 34
     width = cell_w * len(MOODS) + 24
-    height = top + row_h * len(chars) + 10
+    height = top + row_h * len(chars) + meter_h + 22
     font_path = ROOT / "assets/fonts/fusion-pixel-12px.woff2"
     try:
         font = ImageFont.truetype(str(font_path), 24)
         small = ImageFont.truetype(str(font_path), 12)
+        mid = ImageFont.truetype(str(font_path), 24)
     except OSError:
-        font = small = ImageFont.load_default()
+        font = small = mid = ImageFont.load_default()
 
-    base = Image.new("RGBA", (width, height), (74, 92, 124, 255))
+    base = Image.new("RGBA", (width, height), BG)
     d = ImageDraw.Draw(base)
+    d.fontmode = "1"
     for i, mood in enumerate(MOODS):
         name, rng = LABELS[mood]
-        x = 12 + i * cell_w + cell_w // 2
-        d.text((x, 8), name, font=font, fill=(244, 241, 255), anchor="ma")
-        d.text((x, 38), rng, font=small, fill=(214, 222, 240), anchor="ma")
+        x0 = 12 + i * cell_w
+        x = x0 + cell_w // 2
+        # a card per mood: name in the mood colour, the remaining range, both buddies, a meter
+        d.rectangle((x0 + 4, 4, x0 + cell_w - 4, height - 6), fill=CARD, outline=EDGE, width=2)
+        d.text((x, 14), name, font=font, fill=COLORS[mood], anchor="ma")
+        d.text((x, 44), f"剩余 {rng}", font=small, fill=(169, 166, 191), anchor="ma")
+        my = height - meter_h - 4
+        lit = 0 if LEVELS[mood] <= 0 else max(1, round(LEVELS[mood] / 100 * SEGMENTS))
+        seg, gap = 8, 2
+        mx = x - (SEGMENTS * (seg + gap) - gap) // 2 - 22
+        for s in range(SEGMENTS):
+            d.rectangle((mx + s * (seg + gap), my + 6, mx + s * (seg + gap) + seg - 1, my + 15), fill=COLORS[mood] if s < lit else (56, 54, 70))
+        d.text((mx + SEGMENTS * (seg + gap) + 6, my + 1), f"{LEVELS[mood]}%", font=mid, fill=COLORS[mood])
 
     frames = []
     for t in range(0, TOTAL_MS, STEP_MS):

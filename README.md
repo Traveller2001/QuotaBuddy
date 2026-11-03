@@ -1,31 +1,51 @@
 # QuotaBuddy · 额度小伙伴
 
+<p align="center">
+  <img src="docs/hero.png" width="876" alt="QuotaBuddy：桌面上的两只像素小伙伴和额度面板">
+</p>
+
 住在桌面角落的两只像素小伙伴：一只 Claude（Clawd），一只 GPT。它们会自动读取你本机的 **Claude Code** 和 **Codex** 配置，查询上游还剩多少额度，然后用心情表现出来：额度充足时蹦蹦跳跳，快用完时冒汗发慌，用光了就趴在地上睡觉，等下一次刷新。
 
-![showcase](docs/showcase.gif)
-
-![screenshot](docs/screenshot.png)
-
 > English summary: pixel desktop pets that read your local Claude Code / Codex configuration, query the upstream quota (official subscriptions, Sub2API, one-api/new-api relays) and show it as moods plus refill countdowns. Windows, macOS and Linux.
+
+## 5 种心情
+
+<p align="center">
+  <img src="docs/showcase.gif" width="814" alt="两只小伙伴的 5 种心情动画">
+</p>
+
+心情由最紧张的那个额度窗口的剩余比例决定：
+
+| 剩余 | 心情 | 表现 |
+| --- | --- | --- |
+| ≥ 60% | 活力满满 | 蹦跳、冒星星 |
+| 35–60% | 悠闲 | 呼吸、眨眼、哼歌 |
+| 15–35% | 有点累 | 耷拉眼、打哈欠、冒汗 |
+| 3–15% | 焦虑 | 发抖、感叹号、狂冒汗 |
+| < 3% | 累瘫了 | 趴下、XX 眼、Zzz |
+
+## 桌面额度显示
+
+<p align="center">
+  <img src="docs/meters.png" width="906" alt="不同「桌面额度」设置下，小伙伴脚下的额度条">
+</p>
+
+小伙伴脚下默认同时显示 **5h 和 7d** 两个窗口，各自带恢复倒计时，一眼就能看出是要等几小时还是几天。在「设置 → 桌面额度」里可以改成 5h 优先、7d 优先，或者只看最紧张的那个。不管选哪种，只要有窗口剩余低于 35%，其他窗口都会自动展开。下次刷新能恢复的格子会闪烁提示。
+
+## 面板
+
+<p align="center">
+  <img src="docs/panel.png" width="860" alt="面板：额度见底时的概览，以及设置页">
+</p>
+
+单击小伙伴打开面板。每只小伙伴一张卡片，显示各窗口的剩余比例、「即将恢复」时间线（什么时候、恢复多少、哪些账号回来）和今日用量；数字和进度条变化有过渡动画，打开和关闭都有动效。
 
 ## 功能
 
 - **自动识别配置**：不需要手动填写。会依次读取 Claude Code 的 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`（环境变量、`~/.claude/settings.json`、managed settings、`apiKeyHelper`）、Claude 订阅登录凭据，以及 Codex 的 `~/.codex/config.toml`（`model_provider`、`profile`、`env_key`）和 `auth.json`。
-- **5 种心情**：根据最紧张的那个额度窗口的剩余比例决定。
-
-  | 剩余 | 心情 | 表现 |
-  | --- | --- | --- |
-  | ≥ 60% | 活力满满 | 蹦跳、冒星星 |
-  | 35–60% | 悠闲 | 呼吸、眨眼、哼歌 |
-  | 15–35% | 有点累 | 耷拉眼、打哈欠、冒汗 |
-  | 3–15% | 焦虑 | 发抖、感叹号、狂冒汗 |
-  | < 3% | 累瘫了 | 趴下、XX 眼、Zzz |
-
-- **按紧急程度显示额度**：平时小伙伴脚下只显示最紧张的那个窗口（例如 `5h ▮▮▮▮▯▯▯▯ 48% ↻22m +18%`）；一旦剩余低于 35%，会把 5h、7d 等所有限制窗口都展开，各自带恢复倒计时，一眼就能看出是要等几小时还是几天。下次刷新能恢复的格子会闪烁提示。
-- **面板**：每只小伙伴一张卡片，显示各窗口的剩余比例、「即将恢复」时间线（什么时候、恢复多少、哪些账号回来）和今日用量；数字和进度条变化有过渡动画，打开和关闭都有动效。
 - **桌面宠物交互**：除了小伙伴本身，窗口其他区域都是鼠标穿透的。拖动可以移动位置，单击打开面板，双击立即刷新，右键弹出菜单；悬停会冒出详细信息的气泡，平时也会自言自语。
 - **托盘 / 菜单栏**：Windows 托盘提示里显示各自余量；macOS 菜单栏图标旁边直接显示最低余量。右键菜单和托盘菜单可以单独显示 / 隐藏 Claude 或 Codex。
-- **设置**：点头像选择桌面上显示哪几只、大小（小 / 中 / 大）、语言、刷新间隔、开机启动、演示模式，以及 Sub2API 账号管理。
+- **设置**：点头像选择桌面上显示哪几只、大小（小 / 中 / 大）、桌面额度、语言、刷新间隔、开机启动、演示模式，以及 Sub2API 账号管理。
 
 ## 支持的上游
 
@@ -78,6 +98,8 @@ python art/tools/imagegen.py edit --image art/raw/gpt_ref_black.png --image art/
 python art/tools/build_sprites.py
 # 3. README 动图
 python art/tools/make_showcase.py
+# 4. README 截图（先 npm run build；用演示数据和临时配置截取真实界面，不影响正在运行的实例）
+python art/tools/make_screenshots.py
 ```
 
 所有 prompt 都在 `art/prompts/`，原始生成图在 `art/raw/`。
