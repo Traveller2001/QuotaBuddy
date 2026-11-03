@@ -1,8 +1,8 @@
 import { formatDuration, formatPercent } from '../../shared/format';
-import { hudRows, type WindowView } from '../../shared/hud';
+import { hudRows, windowViews, type WindowView } from '../../shared/hud';
 import { bubbleLines, hasKey, t } from '../../shared/i18n';
 import { moodFor } from '../../shared/mood';
-import type { AgentId, AppState, BuddySnapshot, Locale, Mood, Thresholds } from '../../shared/types';
+import type { AgentId, AppState, BuddySnapshot, HudMode, Locale, Mood, Thresholds } from '../../shared/types';
 import { qb } from '../common/api';
 import { maxFrame, spriteMeta, SpriteAnimator } from '../common/sprites';
 import { MOOD_COLORS, windowLabel } from '../common/view';
@@ -67,11 +67,13 @@ class BuddyView {
   private rowsEl: HTMLDivElement;
   private sub: HTMLDivElement;
   private rows = new Map<string, MeterRow>();
-  private urgent = false;
+  /** More than one meter row: each row gets its own countdown instead of the line underneath. */
+  private multi = false;
+  /** The tightest window (what the chatter talks about) and the single meter row, if only one. */
   private lead: WindowView | undefined;
+  private single: WindowView | undefined;
   private snap: BuddySnapshot | null = null;
   private locale: Locale = 'en';
-  private thresholds: Thresholds | null = null;
   private mood: Mood | null = null;
   private hovered = false;
   private bubbleUntil = 0;
@@ -115,28 +117,26 @@ class BuddyView {
     return r;
   }
 
-  update(b: BuddySnapshot, locale: Locale, thresholds: Thresholds): void {
+  update(b: BuddySnapshot, locale: Locale, thresholds: Thresholds, mode: HudMode): void {
     const first = this.snap === null;
     this.snap = b;
     this.locale = locale;
-    this.thresholds = thresholds;
     this.root.classList.toggle('error', b.status === 'error');
     this.root.classList.toggle('unconfigured', b.status === 'unconfigured');
     const mood: Mood = b.status === 'unconfigured' ? 'exhausted' : b.mood;
     this.root.classList.toggle('anxious', mood === 'anxious' && b.status === 'ok');
     this.anim.setMood(mood);
 
-    // Which rows: the tightest window normally, every limiting window when things get tight.
+    // Which rows: the user's choice (5h + 7d by default), plus every limiting window when things get tight.
     const wanted: MeterRow[] = [];
+    this.lead = this.single = undefined;
     if (b.status !== 'ok') {
       wanted.push(this.row('status'));
       wanted[0].set('', 0, '#8d8a9e', undefined, b.status === 'error' ? '?' : '-');
-      this.urgent = false;
-      this.lead = undefined;
     } else {
-      const { urgent, rows } = hudRows(b, thresholds);
-      this.urgent = urgent;
-      this.lead = rows[0];
+      const { rows } = hudRows(b, thresholds, mode);
+      this.lead = windowViews(b).find((w) => !w.informational);
+      if (rows.length === 1) this.single = rows[0];
       if (!rows.length) {
         const r = this.row('none');
         r.set('', null, MOOD_COLORS[mood], undefined, '∞');
@@ -156,7 +156,8 @@ class BuddyView {
       }
     }
     wanted.forEach((r) => this.rowsEl.appendChild(r.el));
-    this.root.classList.toggle('urgent', this.urgent);
+    this.multi = wanted.length > 1;
+    this.root.classList.toggle('multi', this.multi);
     this.tick(Date.now());
 
     if (!first && this.mood !== mood && b.status === 'ok') {
@@ -184,10 +185,9 @@ class BuddyView {
     const name = t(L, `agent.${b.agent}`);
     if (b.status === 'unconfigured') return `${name}: ${t(L, 'ui.unconfigured')}`;
     if (b.status === 'error') return `${name}: ${b.error ?? t(L, 'ui.error')}`;
-    const { rows } = hudRows(b, this.thresholds!);
-    const lines = rows.length ? [] : [t(L, 'ui.noLimit')];
     // the hover shows every window, not just the ones in the compact meter
-    const all = hudRows(b, { ...this.thresholds!, relaxed: 101 }).rows;
+    const all = windowViews(b).filter((w) => !w.informational);
+    const lines = all.length ? [] : [t(L, 'ui.noLimit')];
     for (const w of all) {
       const refill = this.refillText(w);
       lines.push(`${windowLabel(L, { id: w.id, label: w.label } as any)} ${formatPercent(w.remaining)}%${refill ? ` · ${refill}` : ''}`);
@@ -207,6 +207,13 @@ class BuddyView {
   private showHoverLine(): void {
     this.bubble.innerText = this.hoverLine();
     this.bubble.classList.add('show');
+    fitBubbles();
+  }
+
+  /** Room between the stage's top edge and the bubble's top, at its natural size (ignoring the pop-in scale). */
+  bubbleRoom(stageTop: number): number {
+    if (!this.bubble.textContent) return Infinity;
+    return this.bubble.getBoundingClientRect().bottom - this.bubble.offsetHeight - stageTop;
   }
 
   private hover(on: boolean): void {
@@ -220,15 +227,17 @@ class BuddyView {
     this.bubble.innerText = text;
     this.bubble.classList.add('show');
     this.bubbleUntil = Date.now() + ms;
+    fitBubbles();
   }
 
   tick(now: number): void {
     const b = this.snap;
     if (!b) return;
-    for (const r of this.rows.values()) r.tick(now, this.urgent);
-    // calm: one line under the meter says when the tightest window refills
-    const sub = !this.urgent && b.status === 'ok' && this.lead?.refillAt ? Date.parse(this.lead.refillAt) - now : 0;
-    this.sub.textContent = sub > 0 ? `↻${formatDuration(sub)}${this.lead?.refill ? ` +${Math.round(this.lead.refill)}%` : ''}` : '';
+    for (const r of this.rows.values()) r.tick(now, this.multi);
+    // a single row: one line under the meter says when that window refills
+    const one = this.single;
+    const sub = one?.refillAt ? Date.parse(one.refillAt) - now : 0;
+    this.sub.textContent = sub > 0 ? `↻${formatDuration(sub)}${one?.refill ? ` +${Math.round(one.refill)}%` : ''}` : '';
     this.sub.hidden = !this.sub.textContent;
     if (!this.hovered && this.bubbleUntil && now > this.bubbleUntil) {
       this.bubble.classList.remove('show');
@@ -274,9 +283,25 @@ function render(): void {
     }
     stage.appendChild(view.root); // keeps DOM order == list order
     view.layout(scale);
-    view.update(b, state.locale, state.settings.thresholds);
+    view.update(b, state.locale, state.settings.thresholds, state.settings.hudMode);
   }
+  fitBubbles();
   reportSize();
+}
+
+/**
+ * The window only covers the stage, so a tall bubble (hover details, wrapped chatter) would be cut
+ * off at the top. Grow the stage's top padding until every bubble fits; the window grows upwards
+ * with it (its bottom edge stays put). It never shrinks back: the extra room is transparent and
+ * click-through, and shrinking on every shorter line would make the buddies jitter.
+ */
+const BUBBLE_MARGIN = 4;
+function fitBubbles(): void {
+  const r = stage.getBoundingClientRect();
+  const room = Math.min(...[...views.values()].map((v) => v.bubbleRoom(r.top)));
+  if (room >= BUBBLE_MARGIN) return;
+  const current = parseFloat(getComputedStyle(stage).paddingTop);
+  stage.style.paddingTop = `${Math.ceil(current + BUBBLE_MARGIN - room)}px`;
 }
 
 let lastSize = '';
@@ -287,7 +312,8 @@ function reportSize(): void {
   lastSize = key;
   qb().resizePet(Math.ceil(r.width), Math.ceil(r.height));
 }
-new ResizeObserver(reportSize).observe(stage);
+// border-box: fitBubbles grows the padding, which the default content-box observer would miss
+new ResizeObserver(reportSize).observe(stage, { box: 'border-box' });
 
 // ------------------------------------------------------------------ mouse: click-through, drag, click
 

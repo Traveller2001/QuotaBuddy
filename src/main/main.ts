@@ -524,6 +524,13 @@ async function capture(): Promise<void> {
   mkdirSync(CAPTURE_DIR, { recursive: true });
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   await wait(2500);
+  const hover = process.env.QB_CAPTURE_HOVER;
+  if (hover) {
+    // show the hover bubble (the tallest one) of one buddy (=claude / =codex) or all (=1)
+    const sel = JSON.stringify(hover === 'claude' || hover === 'codex' ? `.buddy[data-agent="${hover}"] .sprite` : '.sprite');
+    await pet.webContents.executeJavaScript(`document.querySelectorAll(${sel}).forEach((e) => e.dispatchEvent(new PointerEvent('pointerenter')))`);
+    await wait(600);
+  }
   const frames = Number(process.env.QB_CAPTURE_FRAMES || 1);
   for (let i = 0; i < frames; i++) {
     const img = await pet.webContents.capturePage();
@@ -586,6 +593,8 @@ app.whenReady().then(async () => {
   const userData = app.getPath('userData');
   settings = new SettingsStore(path.join(userData, 'settings.json'));
   savedPosition = settings.get().petPosition;
+  // screenshots for the README: start the throwaway profile with given settings (size, meter, language)
+  if (CAPTURE_DIR && process.env.QB_CAPTURE_SETTINGS) settings.update(JSON.parse(process.env.QB_CAPTURE_SETTINGS));
   sessions = new SessionStore(path.join(userData, 'sessions.json'), {
     // Linux without a keyring falls back to "basic_text", which is not real protection: keep
     // logins in memory there instead of writing them to disk.

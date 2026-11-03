@@ -1,5 +1,5 @@
 import { effectiveUsed } from './mood';
-import type { BuddySnapshot, RefreshEvent, Thresholds, UsageWindow } from './types';
+import type { BuddySnapshot, HudMode, RefreshEvent, Thresholds, UsageWindow } from './types';
 
 export interface WindowView {
   id: string;
@@ -56,13 +56,23 @@ export function windowViews(b: BuddySnapshot, now = Date.now()): WindowView[] {
 }
 
 /**
- * Rows for the compact meter under a buddy. Normally only the tightest window is shown; once any
- * window drops below the "relaxed" threshold every limiting window is shown (up to three), so the
- * user can tell whether a short wait (5h) or a long one (7d) is coming.
+ * Rows for the compact meter under a buddy. The user's choice comes first: 5h and 7d together, one
+ * of them, or (auto) just the tightest window; a choice the source doesn't have falls back to the
+ * tightest. Once any window drops below the "relaxed" threshold every limiting window is added (up to
+ * three), so the user can tell whether a short wait (5h) or a long one (7d) is coming.
  */
-export function hudRows(b: BuddySnapshot, t: Thresholds, now = Date.now()): { urgent: boolean; rows: WindowView[] } {
-  const rows = windowViews(b, now).filter((w) => !w.informational);
-  if (!rows.length) return { urgent: false, rows: [] };
-  const urgent = rows[0].remaining < t.relaxed;
-  return { urgent, rows: urgent ? rows.slice(0, 3) : rows.slice(0, 1) };
+export function hudRows(
+  b: BuddySnapshot,
+  t: Thresholds,
+  mode: HudMode = 'auto',
+  now = Date.now(),
+): { urgent: boolean; rows: WindowView[] } {
+  const all = windowViews(b, now).filter((w) => !w.informational);
+  if (!all.length) return { urgent: false, rows: [] };
+  const urgent = all[0].remaining < t.relaxed;
+  const ids = mode === 'both' ? ['5h', '7d'] : mode === 'auto' ? [] : [mode];
+  const chosen = ids.map((id) => all.find((w) => w.id === id)).filter((w): w is WindowView => !!w);
+  const rows = chosen.length ? chosen : [all[0]];
+  if (urgent) rows.push(...all.filter((w) => !rows.includes(w)));
+  return { urgent, rows: rows.slice(0, 3) };
 }

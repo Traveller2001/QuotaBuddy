@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: flex-end;
   gap: 6px;
-  padding: 58px 34px 4px;
+  padding: 58px 44px 4px;
 }
 
 .buddy {
@@ -109,7 +109,7 @@
   white-space: nowrap;
 }
 
-.urgent .row {
+.multi .row {
   grid-template-columns: auto auto 30px 40px;
 }
 
@@ -181,7 +181,7 @@
   display: none;
 }
 
-.scale-1 .urgent .row {
+.scale-1 .multi .row {
   grid-template-columns: auto auto 30px;
 }
 
@@ -192,7 +192,7 @@
   left: 50%;
   bottom: calc(100% + 6px);
   translate: -50% 0;
-  max-width: 150px;
+  max-width: 196px;
   width: max-content;
   padding: 4px 7px 3px;
   background: #fffdf5;

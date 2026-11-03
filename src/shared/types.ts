@@ -84,12 +84,17 @@ export interface Thresholds {
   anxious: number;
 }
 
+/** Which windows the meter under a buddy shows: 5h and 7d, one of them first, or the tightest. */
+export type HudMode = 'both' | '5h' | '7d' | 'auto';
+export const HUD_MODES: HudMode[] = ['both', '5h', '7d', 'auto'];
+
 export interface Settings {
   scale: 1 | 2 | 3;
   showClaude: boolean;
   showCodex: boolean;
   locale: 'auto' | Locale;
   refreshSeconds: number;
+  hudMode: HudMode;
   launchAtLogin: boolean;
   petPosition?: { x: number; y: number };
   thresholds: Thresholds;

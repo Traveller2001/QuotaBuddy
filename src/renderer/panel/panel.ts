@@ -495,6 +495,9 @@ class SettingsView {
       <div class="group">
         <div class="set-row"><span data-i18n="set.size"></span><div class="seg" data-set="scale">
           <button data-val="1" data-i18n="set.size.1"></button><button data-val="2" data-i18n="set.size.2"></button><button data-val="3" data-i18n="set.size.3"></button></div></div>
+        <div class="set-row"><span data-i18n="set.hudMode"></span><div class="seg" data-set="hudMode">
+          <button data-val="both" data-i18n="set.hudMode.both"></button><button data-val="5h" data-i18n="set.hudMode.5h"></button><button data-val="7d" data-i18n="set.hudMode.7d"></button><button data-val="auto" data-i18n="set.hudMode.auto"></button></div></div>
+        <div class="hint" data-i18n="set.hudModeHint"></div>
         <div class="set-row"><span data-i18n="set.language"></span><div class="seg" data-set="locale">
           <button data-val="auto" data-i18n="ui.lang.auto"></button><button data-val="zh-CN">中文</button><button data-val="en">EN</button></div></div>
         <div class="set-row"><span data-i18n="set.interval"></span><div class="seg" data-set="refreshSeconds">
@@ -721,7 +724,7 @@ root.addEventListener('click', async (e) => {
   const seg = target.closest<HTMLElement>('.seg[data-set]');
   if (seg && target.dataset.val) {
     const key = seg.dataset.set as keyof Settings;
-    const value = key === 'locale' ? target.dataset.val : Number(target.dataset.val);
+    const value = key === 'locale' || key === 'hudMode' ? target.dataset.val : Number(target.dataset.val);
     await qb().updateSettings({ [key]: value } as Partial<Settings>);
     return;
   }

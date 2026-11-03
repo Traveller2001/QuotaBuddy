@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_THRESHOLDS } from '../shared/mood';
-import type { Settings } from '../shared/types';
+import { HUD_MODES, type Settings } from '../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   scale: 2,
@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showCodex: true,
   locale: 'auto',
   refreshSeconds: 60,
+  hudMode: 'both',
   launchAtLogin: false,
   thresholds: DEFAULT_THRESHOLDS,
   loginSkipped: [],
@@ -23,6 +24,7 @@ export function sanitize(input: any, base: Settings = DEFAULT_SETTINGS): Setting
   if (typeof input.showCodex === 'boolean') s.showCodex = input.showCodex;
   if (['auto', 'zh-CN', 'en'].includes(input.locale)) s.locale = input.locale;
   if (Number.isFinite(input.refreshSeconds)) s.refreshSeconds = Math.min(3600, Math.max(15, Math.round(input.refreshSeconds)));
+  if (HUD_MODES.includes(input.hudMode)) s.hudMode = input.hudMode;
   if (typeof input.launchAtLogin === 'boolean') s.launchAtLogin = input.launchAtLogin;
   if (input.petPosition && Number.isFinite(input.petPosition.x) && Number.isFinite(input.petPosition.y)) {
     s.petPosition = { x: Math.round(input.petPosition.x), y: Math.round(input.petPosition.y) };

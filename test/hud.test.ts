@@ -28,7 +28,7 @@ const pool = snap(
 );
 
 test('calm: only the tightest window is shown, with its own refill', () => {
-  const { urgent, rows } = hudRows(pool, DEFAULT_THRESHOLDS, NOW);
+  const { urgent, rows } = hudRows(pool, DEFAULT_THRESHOLDS, 'auto', NOW);
   assert.equal(urgent, false);
   assert.deepEqual(
     rows.map((r) => [r.id, r.remaining, r.refillAt, r.refill]),
@@ -42,7 +42,7 @@ test('urgent: every limiting window is shown, tightest first', () => {
     { id: '5h', label: '5h', usedPercent: 92, scope: 'account', resetsAt: iso(50) },
     { id: '7d·Opus', label: '7d·Opus', usedPercent: 99, scope: 'account', informational: true },
   ]);
-  const { urgent, rows } = hudRows(tight, DEFAULT_THRESHOLDS, NOW);
+  const { urgent, rows } = hudRows(tight, DEFAULT_THRESHOLDS, 'auto', NOW);
   assert.equal(urgent, true);
   assert.deepEqual(
     rows.map((r) => [r.id, r.remaining, r.refill]),
@@ -58,7 +58,7 @@ test('a tight long window alone also counts as urgent and shows the short one to
     { id: '5h', label: '5h', usedPercent: 10, scope: 'pool' },
     { id: '7d', label: '7d', usedPercent: 85, scope: 'pool' },
   ]);
-  const { urgent, rows } = hudRows(weekly, DEFAULT_THRESHOLDS, NOW);
+  const { urgent, rows } = hudRows(weekly, DEFAULT_THRESHOLDS, 'auto', NOW);
   assert.equal(urgent, true);
   assert.deepEqual(
     rows.map((r) => r.id),
@@ -67,7 +67,7 @@ test('a tight long window alone also counts as urgent and shows the short one to
 });
 
 test('no windows (unlimited balance) yields no rows; panel rows keep informational ones last', () => {
-  assert.deepEqual(hudRows(snap([]), DEFAULT_THRESHOLDS, NOW), { urgent: false, rows: [] });
+  assert.deepEqual(hudRows(snap([]), DEFAULT_THRESHOLDS, 'auto', NOW), { urgent: false, rows: [] });
   const views = windowViews(
     snap([
       { id: '7d·Opus', label: '7d·Opus', usedPercent: 99, scope: 'account', informational: true },
@@ -78,5 +78,40 @@ test('no windows (unlimited balance) yields no rows; panel rows keep information
   assert.deepEqual(
     views.map((v) => v.id),
     ['5h', '7d·Opus'],
+  );
+});
+
+test('default mode shows 5h then 7d even when calm, each with its own refill', () => {
+  const { urgent, rows } = hudRows(pool, DEFAULT_THRESHOLDS, 'both', NOW);
+  assert.equal(urgent, false);
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.remaining, r.refillAt]),
+    [
+      ['5h', 40, iso(170)],
+      ['7d', 79, iso(60)],
+    ],
+  );
+});
+
+test('a pinned window comes first; other windows still unfold when tight', () => {
+  assert.deepEqual(
+    hudRows(pool, DEFAULT_THRESHOLDS, '7d', NOW).rows.map((r) => r.id),
+    ['7d'],
+  );
+  const weekly = snap([
+    { id: '5h', label: '5h', usedPercent: 10, scope: 'pool' },
+    { id: '7d', label: '7d', usedPercent: 85, scope: 'pool' },
+  ]);
+  assert.deepEqual(
+    hudRows(weekly, DEFAULT_THRESHOLDS, '5h', NOW).rows.map((r) => r.id),
+    ['5h', '7d'],
+  );
+});
+
+test('a chosen window the source does not have falls back to the tightest', () => {
+  const relay = snap([{ id: 'quota', label: 'quota', usedPercent: 30, scope: 'key' }]);
+  assert.deepEqual(
+    hudRows(relay, DEFAULT_THRESHOLDS, 'both', NOW).rows.map((r) => r.id),
+    ['quota'],
   );
 });
