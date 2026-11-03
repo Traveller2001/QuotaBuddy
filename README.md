@@ -1,17 +1,17 @@
 # QuotaBuddy · 额度小伙伴
 
 <p align="center">
-  <img src="docs/hero.png" width="876" alt="QuotaBuddy：桌面上的两只像素小伙伴和额度面板">
+  <img src="docs/hero.png" width="876" alt="QuotaBuddy：桌面上的像素小伙伴和额度面板">
 </p>
 
-住在桌面角落的两只像素小伙伴：一只 Claude（Clawd），一只 GPT。它们会自动读取你本机的 **Claude Code** 和 **Codex** 配置，查询上游还剩多少额度，然后用心情表现出来：额度充足时蹦蹦跳跳，快用完时冒汗发慌，用光了就趴在地上睡觉，等下一次刷新。
+住在桌面角落的像素小伙伴，每个 AI 编程工具对应一只，目前有 **Claude Code** 的 Clawd 和 **Codex** 的 GPT。它们会自动读取你本机的配置，查询上游还剩多少额度，然后用心情表现出来：额度充足时蹦蹦跳跳，快用完时冒汗发慌，用光了就趴在地上睡觉，等下一次刷新。
 
 > English summary: pixel desktop pets that read your local Claude Code / Codex configuration, query the upstream quota (official subscriptions, Sub2API, one-api/new-api relays) and show it as moods plus refill countdowns. Windows, macOS and Linux.
 
 ## 5 种心情
 
 <p align="center">
-  <img src="docs/showcase.gif" width="814" alt="两只小伙伴的 5 种心情动画">
+  <img src="docs/showcase.gif" width="814" alt="小伙伴的 5 种心情动画">
 </p>
 
 心情由最紧张的那个额度窗口的剩余比例决定：

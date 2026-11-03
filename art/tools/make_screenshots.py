@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Renders the README screenshots from real app captures (demo data, throwaway profile).
 
-  docs/hero.png    title, the panel and both buddies on a desktop
+  docs/hero.png    title, the panel and the buddies on a desktop
   docs/meters.png  what the meter under a buddy shows for each "桌面额度" choice, calm and tight
   docs/panel.png   the panel when quota runs out, and its settings
 
@@ -94,9 +94,9 @@ def hero(main: Path) -> None:
     img.alpha_composite(icon, (m, m + 8))
     d.text((m + 176, m + 14), "QuotaBuddy", font=font(72), fill=INK)
     d.text((m + 180, m + 104), "额度小伙伴", font=font(48), fill=GOLD)
-    d.text((m, m + 200), "住在桌面角落的两只像素小伙伴，", font=font(36), fill=INK)
-    d.text((m, m + 248), "用心情告诉你 Claude / Codex 还剩多少。", font=font(36), fill=INK)
-    chips = ["自动识别本机配置", "5 种心情", "5h / 7d 恢复倒计时", "Sub2API 号池", "one-api / new-api", "Win · macOS · Linux"]
+    d.text((m, m + 200), "住在桌面角落的像素小伙伴，", font=font(36), fill=INK)
+    d.text((m, m + 248), "用心情告诉你 AI 编程工具还剩多少额度。", font=font(36), fill=INK)
+    chips = ["Claude Code · Codex", "自动识别本机配置", "5 种心情", "5h / 7d 恢复倒计时", "Sub2API 号池", "one-api / new-api", "Win · macOS · Linux"]
     x, y = m, m + 332
     for chip in chips:
         tw = int(d.textlength(chip, font=font(24)))
