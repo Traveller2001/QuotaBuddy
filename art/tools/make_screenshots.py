@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import subprocess
 import tempfile
 from pathlib import Path
@@ -26,7 +27,9 @@ FONT = ROOT / "assets/fonts/fusion-pixel-12px.woff2"
 INK = (244, 241, 255)
 INK_DIM = (214, 210, 236)
 GOLD = (255, 205, 102)
-TOP, BOTTOM = (76, 92, 150), (196, 160, 196)
+# a night-sky desktop: dark enough for the panel to sit in, light enough for the sprites to pop
+TOP, BOTTOM = (24, 28, 56), (70, 54, 100)
+CHIP = (52, 48, 76, 255)
 
 MODES = [("both", "5h + 7d（默认）"), ("5h", "5h 优先"), ("7d", "7d 优先"), ("auto", "最紧张")]
 STATES = [("relaxed", "额度充足"), ("tired", "额度紧张")]
@@ -46,7 +49,18 @@ def wallpaper(w: int, h: int) -> Image.Image:
     grad = Image.linear_gradient("L").resize((w, h))
     top = Image.new("RGBA", (w, h), TOP + (255,))
     bottom = Image.new("RGBA", (w, h), BOTTOM + (255,))
-    return Image.composite(bottom, top, grad)
+    img = Image.composite(bottom, top, grad)
+    # sparse pixel stars, thinning out towards the bottom; seeded so the images stay stable
+    rnd = random.Random(7)
+    stars = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(stars)
+    for _ in range(w * h // 9000):
+        x, y = rnd.randrange(w) // 4 * 4, int(h * rnd.random() ** 1.6) // 4 * 4
+        size = 4 if rnd.random() < 0.8 else 8
+        alpha = int(rnd.uniform(60, 200) * (1 - y / h))
+        d.rectangle((x, y, x + size - 1, y + size - 1), fill=(255, 250, 230, alpha))
+    img.alpha_composite(stars)
+    return img
 
 
 def shadowed(base: Image.Image, img: Image.Image, xy: tuple[int, int], blur: int = 18, offset: int = 10) -> None:
@@ -102,7 +116,7 @@ def hero(main: Path) -> None:
         tw = int(d.textlength(chip, font=font(24)))
         if x + tw + 32 > m + max(pets.width, 760):
             x, y = m, y + 64
-        d.rectangle((x, y, x + tw + 32, y + 46), fill=(28, 26, 40, 210), outline=(11, 10, 16), width=4)
+        d.rectangle((x, y, x + tw + 32, y + 46), fill=CHIP, outline=(11, 10, 16), width=4)
         d.text((x + 16, y + 10), chip, font=font(24), fill=INK)
         x += tw + 32 + 16
 
@@ -128,7 +142,7 @@ def meters(caps: dict[tuple[str, str], Path]) -> None:
         y = head + r * (cell_h + 56)
         d.text((40, y + cell_h - 92), title, font=font(36), fill=INK)
         if r:
-            d.line((40, y - 28, w - 40, y - 28), fill=(255, 255, 255, 90), width=2)
+            d.line((40, y - 28, w - 40, y - 28), fill=(104, 96, 140), width=2)
         for c, (mode, _) in enumerate(MODES):
             t = tiles[(state, mode)]
             img.alpha_composite(t, (label_w + c * cell_w + (cell_w - t.width) // 2, y + cell_h - t.height))
