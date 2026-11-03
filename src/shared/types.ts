@@ -94,7 +94,8 @@ export interface Settings {
   showCodex: boolean;
   locale: 'auto' | Locale;
   refreshSeconds: number;
-  hudMode: HudMode;
+  /** Per buddy: which windows its meter shows. */
+  hudMode: Record<AgentId, HudMode>;
   launchAtLogin: boolean;
   petPosition?: { x: number; y: number };
   thresholds: Thresholds;

@@ -56,10 +56,10 @@ export function windowViews(b: BuddySnapshot, now = Date.now()): WindowView[] {
 }
 
 /**
- * Rows for the compact meter under a buddy. The user's choice comes first: 5h and 7d together, one
- * of them, or (auto) just the tightest window; a choice the source doesn't have falls back to the
- * tightest. Once any window drops below the "relaxed" threshold every limiting window is added (up to
- * three), so the user can tell whether a short wait (5h) or a long one (7d) is coming.
+ * Rows for the compact meter under a buddy. An explicit choice (5h and 7d together, or one of them)
+ * is shown exactly as chosen. Auto shows the tightest window, and every limiting window (up to three)
+ * once any drops below the "relaxed" threshold, so the user can tell whether a short wait (5h) or a
+ * long one (7d) is coming. A choice the source doesn't have falls back to auto.
  */
 export function hudRows(
   b: BuddySnapshot,
@@ -72,7 +72,6 @@ export function hudRows(
   const urgent = all[0].remaining < t.relaxed;
   const ids = mode === 'both' ? ['5h', '7d'] : mode === 'auto' ? [] : [mode];
   const chosen = ids.map((id) => all.find((w) => w.id === id)).filter((w): w is WindowView => !!w);
-  const rows = chosen.length ? chosen : [all[0]];
-  if (urgent) rows.push(...all.filter((w) => !rows.includes(w)));
-  return { urgent, rows: rows.slice(0, 3) };
+  if (chosen.length) return { urgent, rows: chosen };
+  return { urgent, rows: urgent ? all.slice(0, 3) : all.slice(0, 1) };
 }

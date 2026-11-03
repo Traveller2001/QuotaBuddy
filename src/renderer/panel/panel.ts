@@ -2,7 +2,7 @@ import { formatClock, formatCount, formatDuration, formatMoney, hostOf } from '.
 import { windowViews, type WindowView } from '../../shared/hud';
 import { hasKey, t } from '../../shared/i18n';
 import { moodFor } from '../../shared/mood';
-import type { AgentId, AppState, BuddySnapshot, Locale, Mood, Settings, Thresholds, UsageWindow } from '../../shared/types';
+import type { AgentId, AppState, BuddySnapshot, HudMode, Locale, Mood, Settings, Thresholds, UsageWindow } from '../../shared/types';
 import { qb } from '../common/api';
 import { SpriteAnimator } from '../common/sprites';
 import { AGENT_COLORS, esc, kindLabel, MOOD_COLORS, sourceLabel, windowLabel } from '../common/view';
@@ -495,7 +495,9 @@ class SettingsView {
       <div class="group">
         <div class="set-row"><span data-i18n="set.size"></span><div class="seg" data-set="scale">
           <button data-val="1" data-i18n="set.size.1"></button><button data-val="2" data-i18n="set.size.2"></button><button data-val="3" data-i18n="set.size.3"></button></div></div>
-        <div class="set-row"><span data-i18n="set.hudMode"></span><div class="seg" data-set="hudMode">
+        <div class="set-row"><span data-i18n="set.hudMode.claude"></span><div class="seg" data-set="hudMode" data-agent="claude">
+          <button data-val="both" data-i18n="set.hudMode.both"></button><button data-val="5h" data-i18n="set.hudMode.5h"></button><button data-val="7d" data-i18n="set.hudMode.7d"></button><button data-val="auto" data-i18n="set.hudMode.auto"></button></div></div>
+        <div class="set-row"><span data-i18n="set.hudMode.codex"></span><div class="seg" data-set="hudMode" data-agent="codex">
           <button data-val="both" data-i18n="set.hudMode.both"></button><button data-val="5h" data-i18n="set.hudMode.5h"></button><button data-val="7d" data-i18n="set.hudMode.7d"></button><button data-val="auto" data-i18n="set.hudMode.auto"></button></div></div>
         <div class="hint" data-i18n="set.hudModeHint"></div>
         <div class="set-row"><span data-i18n="set.language"></span><div class="seg" data-set="locale">
@@ -525,7 +527,8 @@ class SettingsView {
     const locale = s.locale;
     for (const node of this.host.querySelectorAll<HTMLElement>('[data-i18n]')) node.textContent = t(locale, node.dataset.i18n!);
     for (const seg of this.host.querySelectorAll<HTMLElement>('.seg[data-set]')) {
-      const current = String((s.settings as any)[seg.dataset.set!]);
+      const agent = seg.dataset.agent as AgentId | undefined;
+      const current = String(agent ? s.settings.hudMode[agent] : (s.settings as any)[seg.dataset.set!]);
       for (const b of seg.querySelectorAll<HTMLElement>('button')) b.classList.toggle('on', b.dataset.val === current);
     }
     for (const sw of this.host.querySelectorAll<HTMLElement>('.switch')) {
@@ -724,7 +727,12 @@ root.addEventListener('click', async (e) => {
   const seg = target.closest<HTMLElement>('.seg[data-set]');
   if (seg && target.dataset.val) {
     const key = seg.dataset.set as keyof Settings;
-    const value = key === 'locale' || key === 'hudMode' ? target.dataset.val : Number(target.dataset.val);
+    const agent = seg.dataset.agent as AgentId | undefined;
+    if (key === 'hudMode' && agent) {
+      await qb().updateSettings({ hudMode: { ...state.settings.hudMode, [agent]: target.dataset.val as HudMode } });
+      return;
+    }
+    const value = key === 'locale' ? target.dataset.val : Number(target.dataset.val);
     await qb().updateSettings({ [key]: value } as Partial<Settings>);
     return;
   }

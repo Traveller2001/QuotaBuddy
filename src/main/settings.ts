@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showCodex: true,
   locale: 'auto',
   refreshSeconds: 60,
-  hudMode: 'both',
+  hudMode: { claude: 'both', codex: 'both' },
   launchAtLogin: false,
   thresholds: DEFAULT_THRESHOLDS,
   loginSkipped: [],
@@ -17,14 +17,20 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export function sanitize(input: any, base: Settings = DEFAULT_SETTINGS): Settings {
-  const s: Settings = { ...base, thresholds: { ...base.thresholds }, loginSkipped: [...base.loginSkipped] };
+  const s: Settings = { ...base, thresholds: { ...base.thresholds }, hudMode: { ...base.hudMode }, loginSkipped: [...base.loginSkipped] };
   if (!input || typeof input !== 'object') return s;
   if ([1, 2, 3].includes(input.scale)) s.scale = input.scale;
   if (typeof input.showClaude === 'boolean') s.showClaude = input.showClaude;
   if (typeof input.showCodex === 'boolean') s.showCodex = input.showCodex;
   if (['auto', 'zh-CN', 'en'].includes(input.locale)) s.locale = input.locale;
   if (Number.isFinite(input.refreshSeconds)) s.refreshSeconds = Math.min(3600, Math.max(15, Math.round(input.refreshSeconds)));
-  if (HUD_MODES.includes(input.hudMode)) s.hudMode = input.hudMode;
+  // a single mode is the old shared setting: it applies to every buddy
+  if (HUD_MODES.includes(input.hudMode)) s.hudMode = { claude: input.hudMode, codex: input.hudMode };
+  else if (input.hudMode && typeof input.hudMode === 'object') {
+    for (const agent of ['claude', 'codex'] as const) {
+      if (HUD_MODES.includes(input.hudMode[agent])) s.hudMode[agent] = input.hudMode[agent];
+    }
+  }
   if (typeof input.launchAtLogin === 'boolean') s.launchAtLogin = input.launchAtLogin;
   if (input.petPosition && Number.isFinite(input.petPosition.x) && Number.isFinite(input.petPosition.y)) {
     s.petPosition = { x: Math.round(input.petPosition.x), y: Math.round(input.petPosition.y) };

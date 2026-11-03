@@ -283,7 +283,7 @@ function render(): void {
     }
     stage.appendChild(view.root); // keeps DOM order == list order
     view.layout(scale);
-    view.update(b, state.locale, state.settings.thresholds, state.settings.hudMode);
+    view.update(b, state.locale, state.settings.thresholds, state.settings.hudMode[b.agent]);
   }
   fitBubbles();
   reportSize();

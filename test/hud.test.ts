@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { sanitize } from '../src/main/settings';
 import { hudRows, windowViews } from '../src/shared/hud';
 import { DEFAULT_THRESHOLDS, finalize } from '../src/shared/mood';
 import type { UsageWindow } from '../src/shared/types';
@@ -93,18 +94,20 @@ test('default mode shows 5h then 7d even when calm, each with its own refill', (
   );
 });
 
-test('a pinned window comes first; other windows still unfold when tight', () => {
+test('an explicit choice is shown as chosen, even when another window is tight', () => {
   assert.deepEqual(
     hudRows(pool, DEFAULT_THRESHOLDS, '7d', NOW).rows.map((r) => r.id),
     ['7d'],
   );
   const weekly = snap([
-    { id: '5h', label: '5h', usedPercent: 10, scope: 'pool' },
-    { id: '7d', label: '7d', usedPercent: 85, scope: 'pool' },
+    { id: '5h', label: '5h', usedPercent: 0, scope: 'pool' },
+    { id: '7d', label: '7d', usedPercent: 91, scope: 'pool' },
   ]);
+  const { urgent, rows } = hudRows(weekly, DEFAULT_THRESHOLDS, '5h', NOW);
+  assert.equal(urgent, true);
   assert.deepEqual(
-    hudRows(weekly, DEFAULT_THRESHOLDS, '5h', NOW).rows.map((r) => r.id),
-    ['5h', '7d'],
+    rows.map((r) => r.id),
+    ['5h'],
   );
 });
 
@@ -114,4 +117,10 @@ test('a chosen window the source does not have falls back to the tightest', () =
     hudRows(relay, DEFAULT_THRESHOLDS, 'both', NOW).rows.map((r) => r.id),
     ['quota'],
   );
+});
+
+test('meter choice is per buddy; the old shared setting applies to both', () => {
+  assert.deepEqual(sanitize({ hudMode: '5h' }).hudMode, { claude: '5h', codex: '5h' });
+  assert.deepEqual(sanitize({ hudMode: { codex: '7d', claude: 'nope' } }).hudMode, { claude: 'both', codex: '7d' });
+  assert.deepEqual(sanitize({}).hudMode, { claude: 'both', codex: 'both' });
 });

@@ -31,7 +31,7 @@ GOLD = (255, 205, 102)
 TOP, BOTTOM = (24, 28, 56), (70, 54, 100)
 CHIP = (52, 48, 76, 255)
 
-MODES = [("both", "5h + 7d（默认）"), ("5h", "5h 优先"), ("7d", "7d 优先"), ("auto", "最紧张")]
+MODES = [("both", "5h + 7d（默认）"), ("5h", "只看 5h"), ("7d", "只看 7d"), ("auto", "最紧张")]
 STATES = [("relaxed", "额度充足"), ("tired", "额度紧张")]
 
 
@@ -175,7 +175,7 @@ def main() -> None:
         for state, _ in STATES:
             for mode, _ in MODES:
                 print(f"capturing meter {state} / {mode}")
-                caps[(state, mode)] = capture(base / f"{state}-{mode}", f"{state},{state}", {"hudMode": mode, "showCodex": False})
+                caps[(state, mode)] = capture(base / f"{state}-{mode}", f"{state},{state}", {"hudMode": {"claude": mode, "codex": mode}, "showCodex": False})
         hero(main_cap)
         meters(caps)
         panels(main_cap, tight_cap)
