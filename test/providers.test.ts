@@ -101,19 +101,62 @@ test('sub2api pool usage: windows, refill schedule, accounts', () => {
   assert.equal(p.refreshes[0].restorePercent, 18);
 });
 
-test('sub2api pool usage: every account limited means empty, until accounts come back', () => {
+test('sub2api pool usage: an outage no window explains (overloaded / paused) gets its own row', () => {
   const p = parsePool({
     available: true,
     accounts_total: 2,
     accounts_available: 0,
-    five_hour: { used_percent: 100 },
+    five_hour: { used_percent: 40 },
     refreshes: [{ at: '2026-11-03T10:00:00Z', kind: 'account', accounts: 2 }],
   });
   const acc = p.windows.find((w) => w.id === 'accounts');
   assert.equal(acc?.usedPercent, 100);
   assert.equal(acc?.resetsAt, '2026-11-03T10:00:00Z');
+  assert.equal(p.windows.find((w) => w.id === '5h')?.usedPercent, 40, 'an unrelated block does not touch the window');
   const unavailable = parsePool({ available: false, reason: 'no accounts', accounts_total: 0, accounts_available: 0 });
   assert.equal(unavailable.notes[0].key, 'note.poolUnavailable');
+});
+
+test('sub2api pool usage: a 429-limited account counts as full, not as its frozen pre-limit sample', () => {
+  // Real case: the only account hit its 5h limit at 19:29 (back at 20:50) while Sub2API still had
+  // the last successful sample of 60%.
+  const p = parsePool({
+    available: true,
+    accounts_total: 1,
+    accounts_available: 0,
+    five_hour: { used_percent: 60, remaining_percent: 40, next_reset_at: '2026-11-03T12:50:00Z', next_restore_percent: 60 },
+    seven_day: { used_percent: 21, remaining_percent: 79, next_reset_at: '2026-11-04T19:00:00Z', next_restore_percent: 21 },
+    refreshes: [
+      { at: '2026-11-03T12:50:00Z', kind: 'account', accounts: 1 },
+      { at: '2026-11-03T12:50:00Z', kind: 'five_hour', restore_percent: 60, accounts: 1 },
+      { at: '2026-11-04T19:00:00Z', kind: 'seven_day', restore_percent: 21, accounts: 1 },
+    ],
+  });
+  const five = p.windows.find((w) => w.id === '5h')!;
+  assert.equal(five.usedPercent, 100);
+  assert.equal(five.restorePercent, 100);
+  assert.equal(p.refreshes.find((r) => r.kind === 'five_hour')?.restorePercent, 100);
+  assert.equal(p.windows.find((w) => w.id === '7d')?.usedPercent, 21, 'the 7d window did not cause the block');
+  assert.equal(p.windows.find((w) => w.id === 'accounts'), undefined, 'the 5h window already explains the outage');
+});
+
+test('sub2api pool usage: only the limited accounts are corrected in a larger pool', () => {
+  // two accounts: A (limited, frozen at 60%) resets at 12:50, B is at 40%; pool average 50%
+  const p = parsePool({
+    available: true,
+    accounts_total: 2,
+    accounts_available: 1,
+    five_hour: { used_percent: 50, next_reset_at: '2026-11-03T12:50:00Z', next_restore_percent: 30 },
+    refreshes: [
+      { at: '2026-11-03T12:50:00Z', kind: 'account', accounts: 1 },
+      { at: '2026-11-03T12:50:00Z', kind: 'five_hour', restore_percent: 30, accounts: 1 },
+      { at: '2026-11-03T14:10:00Z', kind: 'five_hour', restore_percent: 20, accounts: 1 },
+    ],
+  });
+  const five = p.windows.find((w) => w.id === '5h')!;
+  assert.equal(five.usedPercent, 70, '(100 + 40) / 2');
+  assert.equal(five.restorePercent, 50);
+  assert.equal(p.refreshes.find((r) => r.at === '2026-11-03T14:10:00Z')?.restorePercent, 20, 'B is untouched');
 });
 
 test('official Claude subscription usage', () => {

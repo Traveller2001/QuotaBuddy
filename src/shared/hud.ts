@@ -72,6 +72,9 @@ export function hudRows(
   const urgent = all[0].remaining < t.relaxed;
   const ids = mode === 'both' ? ['5h', '7d'] : mode === 'auto' ? [] : [mode];
   const chosen = ids.map((id) => all.find((w) => w.id === id)).filter((w): w is WindowView => !!w);
+  // "every pool account is out" overrides any choice: the windows alone would look usable
+  const outage = all.find((w) => w.id === 'accounts' && w.remaining <= 0);
+  if (outage && chosen.length) return { urgent: true, rows: [outage, ...chosen] };
   if (chosen.length) return { urgent, rows: chosen };
   return { urgent, rows: urgent ? all.slice(0, 3) : all.slice(0, 1) };
 }

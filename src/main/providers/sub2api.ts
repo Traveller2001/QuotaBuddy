@@ -187,9 +187,55 @@ export function parsePool(s: any): Parts {
     restorePercent: typeof r.restore_percent === 'number' ? r.restore_percent : undefined,
     accounts: typeof r.accounts === 'number' ? r.accounts : undefined,
   }));
-  if (total > 0 && available === 0) {
+  if (total > 0) correctForRateLimitedAccounts(parts, total);
+  if (total > 0 && available === 0 && !parts.windows.some((w) => w.usedPercent >= 99.5)) {
+    // every account is out but no window explains it (overloaded / paused): show that on its own
     const back = parts.refreshes.find((r) => r.kind === 'account');
     parts.windows.push({ id: 'accounts', label: 'accounts', usedPercent: 100, resetsAt: back?.at, detail: `0 / ${total}`, scope: 'pool' });
   }
   return parts;
+}
+
+const WINDOW_REFRESH: Record<string, string> = { '5h': 'five_hour', '7d': 'seven_day' };
+/** An account's "back at" and a window's reset are the same moment when that window limited it. */
+const SAME_MOMENT_MS = 10 * 60_000;
+
+/**
+ * Sub2API samples each account's 5h / 7d utilisation from successful responses only. When Anthropic
+ * answers 429 the account is marked rate limited until the window resets, but its utilisation stays
+ * frozen at the last value seen before the limit, so the pool looks like it still has room.
+ *
+ * The pool summary does say when blocked accounts come back ("account" refreshes) and when each
+ * window resets for how many accounts and how much ("five_hour" / "seven_day" refreshes). When those
+ * coincide, those accounts were stopped by that window: their real share of it is 100%, so the pool
+ * window is raised by the difference, and so is what its reset gives back.
+ */
+export function correctForRateLimitedAccounts(parts: Parts, total: number): void {
+  const blocked = parts.refreshes.filter((r) => r.kind === 'account');
+  if (!blocked.length) return;
+  for (const w of parts.windows) {
+    const kind = WINDOW_REFRESH[w.id];
+    if (!kind) continue;
+    let raise = 0;
+    for (const refresh of parts.refreshes) {
+      if (refresh.kind !== kind) continue;
+      const at = Date.parse(refresh.at);
+      const back = blocked.find((b) => Math.abs(Date.parse(b.at) - at) <= SAME_MOMENT_MS);
+      if (!back) continue;
+      const accounts = Math.min(back.accounts ?? 1, refresh.accounts ?? back.accounts ?? 1);
+      const full = (accounts * 100) / total;
+      const delta = full - (refresh.restorePercent ?? 0);
+      if (delta <= 0.05) continue;
+      refresh.restorePercent = Math.round(full * 10) / 10;
+      raise += delta;
+    }
+    if (raise <= 0) continue;
+    w.usedPercent = Math.min(100, Math.round((w.usedPercent + raise) * 10) / 10);
+    const next = parts.refreshes
+      .filter((r) => r.kind === kind)
+      .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
+    if (next && w.resetsAt && Math.abs(Date.parse(next.at) - Date.parse(w.resetsAt)) <= SAME_MOMENT_MS) {
+      w.restorePercent = next.restorePercent;
+    }
+  }
 }

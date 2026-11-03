@@ -124,3 +124,21 @@ test('meter choice is per buddy; the old shared setting applies to both', () => 
   assert.deepEqual(sanitize({ hudMode: { codex: '7d', claude: 'nope' } }).hudMode, { claude: 'both', codex: '7d' });
   assert.deepEqual(sanitize({}).hudMode, { claude: 'both', codex: 'both' });
 });
+
+test('a pool outage is always on the meter, whatever window was chosen', () => {
+  const out = snap(
+    [
+      { id: '5h', label: '5h', usedPercent: 40, scope: 'pool' },
+      { id: '7d', label: '7d', usedPercent: 20, scope: 'pool' },
+      { id: 'accounts', label: 'accounts', usedPercent: 100, scope: 'pool', resetsAt: iso(80) },
+    ],
+    [{ at: iso(80), kind: 'account' }],
+  );
+  for (const mode of ['both', '5h', '7d', 'auto'] as const) {
+    const { urgent, rows } = hudRows(out, DEFAULT_THRESHOLDS, mode, NOW);
+    assert.equal(urgent, true, mode);
+    assert.equal(rows[0].id, 'accounts', mode);
+    assert.equal(rows[0].refillAt, iso(80), mode);
+  }
+  assert.equal(out.mood, 'exhausted');
+});
