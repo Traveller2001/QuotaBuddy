@@ -112,7 +112,7 @@ test('sub2api pool usage: an outage no window explains (overloaded / paused) get
   const acc = p.windows.find((w) => w.id === 'accounts');
   assert.equal(acc?.usedPercent, 100);
   assert.equal(acc?.resetsAt, '2026-11-03T10:00:00Z');
-  assert.equal(p.windows.find((w) => w.id === '5h')?.usedPercent, 40, 'an unrelated block does not touch the window');
+  assert.equal(p.windows.find((w) => w.id === '5h')?.usedPercent, 100, 'no account can take requests, so nothing is usable');
   const unavailable = parsePool({ available: false, reason: 'no accounts', accounts_total: 0, accounts_available: 0 });
   assert.equal(unavailable.notes[0].key, 'note.poolUnavailable');
 });
@@ -136,7 +136,15 @@ test('sub2api pool usage: a 429-limited account counts as full, not as its froze
   assert.equal(five.usedPercent, 100);
   assert.equal(five.restorePercent, 100);
   assert.equal(p.refreshes.find((r) => r.kind === 'five_hour')?.restorePercent, 100);
-  assert.equal(p.windows.find((w) => w.id === '7d')?.usedPercent, 21, 'the 7d window did not cause the block');
+  // the 7d budget is fine, but nothing can use it until the account is back at the 5h reset
+  assert.equal(p.windows.find((w) => w.id === '7d')?.usedPercent, 100);
+  assert.deepEqual(
+    p.refreshes.filter((r) => r.kind === 'seven_day').map((r) => [r.at, r.restorePercent]),
+    [
+      ['2026-11-03T12:50:00Z', 79],
+      ['2026-11-04T19:00:00Z', 21],
+    ],
+  );
   assert.equal(p.windows.find((w) => w.id === 'accounts'), undefined, 'the 5h window already explains the outage');
 });
 
@@ -157,6 +165,55 @@ test('sub2api pool usage: only the limited accounts are corrected in a larger po
   assert.equal(five.usedPercent, 70, '(100 + 40) / 2');
   assert.equal(five.restorePercent, 50);
   assert.equal(p.refreshes.find((r) => r.at === '2026-11-03T14:10:00Z')?.restorePercent, 20, 'B is untouched');
+});
+
+test('sub2api pool usage: windows never show more than the available accounts can serve', () => {
+  // Real case: 3 accounts, A limited by 5h (back 06:40), B by 7d (back tomorrow), C out for a reason
+  // no window explains. The samples still said 5h 67% / 7d 34% left.
+  const refreshes = [
+    { at: '2026-11-04T06:40:00Z', kind: 'account', accounts: 1 },
+    { at: '2026-11-04T06:40:00Z', kind: 'five_hour', restore_percent: 29.7, accounts: 1 },
+    { at: '2026-11-04T10:40:00Z', kind: 'five_hour', restore_percent: 2.7, accounts: 1 },
+    { at: '2026-11-05T07:00:00Z', kind: 'account', accounts: 1 },
+    { at: '2026-11-05T07:00:00Z', kind: 'seven_day', restore_percent: 33.3, accounts: 1 },
+  ];
+  const pool = (available: number) =>
+    parsePool({
+      available: true,
+      accounts_total: 3,
+      accounts_available: available,
+      five_hour: { used_percent: 32.3, next_reset_at: '2026-11-04T06:40:00Z', next_restore_percent: 29.7 },
+      seven_day: { used_percent: 66.3, next_reset_at: '2026-11-05T07:00:00Z', next_restore_percent: 33.3 },
+      refreshes,
+    });
+  const none = pool(0);
+  assert.deepEqual(
+    none.windows.map((w) => [w.id, w.usedPercent]),
+    [
+      ['5h', 100],
+      ['7d', 100],
+      ['accounts', 100],
+    ],
+  );
+  // what comes back when: A at 06:40 brings its share to both windows, B tomorrow the rest
+  const back = (kind: string) => none.refreshes.filter((r) => r.kind === kind).map((r) => [r.at.slice(5, 16), r.restorePercent]);
+  assert.deepEqual(back('five_hour'), [
+    ['11-04T06:40', 33.3],
+    ['11-04T10:40', 2.7],
+    ['11-05T07:00', 30.8],
+  ]);
+  assert.deepEqual(back('seven_day'), [
+    ['11-04T06:40', 33.3],
+    ['11-05T07:00', 33.3],
+  ]);
+  const one = pool(1);
+  assert.deepEqual(
+    one.windows.map((w) => [w.id, w.usedPercent]),
+    [
+      ['5h', 66.7],
+      ['7d', 66.7],
+    ],
+  );
 });
 
 test('official Claude subscription usage', () => {

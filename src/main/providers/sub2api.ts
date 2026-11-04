@@ -188,12 +188,49 @@ export function parsePool(s: any): Parts {
     accounts: typeof r.accounts === 'number' ? r.accounts : undefined,
   }));
   if (total > 0) correctForRateLimitedAccounts(parts, total);
-  if (total > 0 && available === 0 && !parts.windows.some((w) => w.usedPercent >= 99.5)) {
+  const explained = parts.windows.some((w) => w.usedPercent >= 99.5);
+  if (total > 0) capToAvailableAccounts(parts, total, available);
+  if (total > 0 && available === 0 && !explained) {
     // every account is out but no window explains it (overloaded / paused): show that on its own
     const back = parts.refreshes.find((r) => r.kind === 'account');
     parts.windows.push({ id: 'accounts', label: 'accounts', usedPercent: 100, resetsAt: back?.at, detail: `0 / ${total}`, scope: 'pool' });
   }
   return parts;
+}
+
+/**
+ * Whatever stopped them (a 429 no window explains, overload, a banned or expired account), accounts
+ * that can't take requests still count with their last sampled usage, so the pool windows show room
+ * nobody can use. Each account is at most 1/total of the pool, so what is usable now is at most
+ * available / total of every window.
+ *
+ * The capacity cut off that way comes back with the accounts, not with the window's own reset: each
+ * time accounts come back, the window gets their share back (never more than was cut). That becomes
+ * a refill of the window, merged into its own reset when both happen at the same moment.
+ */
+export function capToAvailableAccounts(parts: Parts, total: number, available: number): void {
+  const maxRemaining = (Math.min(available, total) * 100) / total;
+  const comeback = parts.refreshes
+    .filter((r) => r.kind === 'account')
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  for (const w of parts.windows) {
+    if (w.scope !== 'pool') continue;
+    let cut = 100 - w.usedPercent - maxRemaining;
+    if (cut <= 0.05) continue;
+    w.usedPercent = Math.round((100 - maxRemaining) * 10) / 10;
+    const kind = WINDOW_REFRESH[w.id];
+    if (!kind) continue;
+    for (const back of comeback) {
+      if (cut < 1) break;
+      const gain = Math.min(cut, ((back.accounts ?? 1) * 100) / total);
+      cut -= gain;
+      const at = Date.parse(back.at);
+      const same = parts.refreshes.find((r) => r.kind === kind && Math.abs(Date.parse(r.at) - at) <= SAME_MOMENT_MS);
+      if (same) same.restorePercent = Math.round(Math.max(same.restorePercent ?? 0, gain) * 10) / 10;
+      else parts.refreshes.push({ at: back.at, kind, restorePercent: Math.round(gain * 10) / 10, accounts: back.accounts });
+    }
+  }
+  parts.refreshes.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
 const WINDOW_REFRESH: Record<string, string> = { '5h': 'five_hour', '7d': 'seven_day' };
