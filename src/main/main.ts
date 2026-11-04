@@ -37,6 +37,12 @@ const preload = path.join(ROOT, 'dist', 'preload', 'preload.js');
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
 const PANEL_WIDTH = 376;
+/**
+ * Window coordinates for Electron, which only takes int32: Math.round(-0.3) is -0 (not an int32) and
+ * a bad value from a renderer is NaN, both of which throw. Fractional pointer positions near the
+ * screen's top / left edge produce -0 while dragging.
+ */
+const int = (n: number) => Math.round(n) || 0;
 const CAPTURE_DIR = process.env.QB_CAPTURE;
 
 // One name everywhere: userData lives in <appData>/QuotaBuddy in dev and packaged builds alike.
@@ -485,9 +491,9 @@ function registerIpc(): void {
   ipcMain.on('pet:resize', (_e, width: number, height: number) => {
     if (!pet) return;
     const b = pet.getBounds();
-    const w = Math.round(width);
-    const h = Math.round(height);
-    if (w === b.width && h === b.height) return;
+    const w = int(width);
+    const h = int(height);
+    if (w <= 0 || h <= 0 || (w === b.width && h === b.height)) return;
     // keep the bottom-right corner fixed so the buddies stay "on the ground"
     pet.setBounds({ x: b.x + b.width - w, y: b.y + b.height - h, width: w, height: h });
   });
@@ -502,7 +508,7 @@ function registerIpc(): void {
       const [wx, wy] = pet.getPosition();
       drag = { mx: x, my: y, wx, wy };
     } else if (phase === 'move' && drag) {
-      pet.setPosition(Math.round(drag.wx + x - drag.mx), Math.round(drag.wy + y - drag.my));
+      pet.setPosition(int(drag.wx + x - drag.mx), int(drag.wy + y - drag.my));
     } else if (phase === 'end' && drag) {
       drag = null;
       const [px, py] = pet.getPosition();
