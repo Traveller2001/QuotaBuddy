@@ -1,5 +1,6 @@
 import { formatMoney } from '../../shared/format';
 import { emptyParts, HttpError, pct, requestJson, type FetchFn, type Parts } from './http';
+import type { RefreshEvent } from '../../shared/types';
 
 /** https://host/v1 -> https://host ; https://host/ -> https://host */
 export function gatewayRoot(baseUrl: string): string {
@@ -202,19 +203,31 @@ export function parsePool(s: any): Parts {
  * Whatever stopped them (a 429 no window explains, overload, a banned or expired account), accounts
  * that can't take requests still count with their last sampled usage, so the pool windows show room
  * nobody can use. Each account is at most 1/total of the pool, so what is usable now is at most
- * available / total of every window.
+ * available / total of every window, minus what the available accounts have used of it.
+ *
+ * That usage is in the refresh list: every account with usage in a window has a refill of that window
+ * at its own reset. A refill that coincides with accounts coming back belongs to blocked accounts;
+ * the rest belongs to accounts still taking requests (or to blocked ones whose comeback is something
+ * else, which only makes the estimate more cautious). Without this, an available account that has
+ * used up its 5h looks like a fresh one as long as the blocked accounts have 5h left.
  *
  * The capacity cut off that way comes back with the accounts, not with the window's own reset: each
  * time accounts come back, the window gets their share back (never more than was cut). That becomes
  * a refill of the window, merged into its own reset when both happen at the same moment.
  */
 export function capToAvailableAccounts(parts: Parts, total: number, available: number): void {
-  const maxRemaining = (Math.min(available, total) * 100) / total;
+  const share = (Math.min(available, total) * 100) / total;
   const comeback = parts.refreshes
     .filter((r) => r.kind === 'account')
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const blocked = (r: RefreshEvent) => comeback.some((b) => Math.abs(Date.parse(b.at) - Date.parse(r.at)) <= SAME_MOMENT_MS);
+  const usedByAvailable = new Map<string, number>();
+  for (const r of parts.refreshes) {
+    if (r.kind !== 'account' && !blocked(r)) usedByAvailable.set(r.kind, (usedByAvailable.get(r.kind) ?? 0) + (r.restorePercent ?? 0));
+  }
   for (const w of parts.windows) {
     if (w.scope !== 'pool') continue;
+    const maxRemaining = Math.max(0, share - (usedByAvailable.get(WINDOW_REFRESH[w.id]) ?? 0));
     let cut = 100 - w.usedPercent - maxRemaining;
     if (cut <= 0.05) continue;
     w.usedPercent = Math.round((100 - maxRemaining) * 10) / 10;

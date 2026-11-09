@@ -12,6 +12,8 @@ export interface WindowView {
   refill?: number;
   detail?: string;
   informational: boolean;
+  /** A longer window with less left caps this one (e.g. 5h when 7d is used up): its id. */
+  boundBy?: string;
 }
 
 /** Pool refresh kinds reported by Sub2API, keyed by our window ids. */
@@ -39,9 +41,33 @@ function refillFor(w: UsageWindow, refreshes: RefreshEvent[], now: number): Pick
   return {};
 }
 
-/** All windows as display rows, most urgent first (informational ones last). */
+/** Window lengths in hours; a total quota outlasts them all. */
+const HOURS: Record<string, number> = { '5h': 5, '1d': 24, daily: 24, '7d': 168, weekly: 168, monthly: 720, quota: Infinity };
+
+/**
+ * A request needs room in every window, so a shorter window can't offer more than a longer one has
+ * left: with 7d used up, 5h is empty too however little of it was used. It then also fills up when
+ * the longer window does (never by more than its own room).
+ */
+function boundByLonger(views: WindowView[]): void {
+  for (const v of views) {
+    const hours = HOURS[v.id];
+    if (v.informational || hours === undefined) continue;
+    const longer = views
+      .filter((o) => !o.informational && (HOURS[o.id] ?? 0) > hours && o.remaining < v.remaining)
+      .sort((a, c) => a.remaining - c.remaining)[0];
+    if (!longer) continue;
+    const room = v.remaining - longer.remaining;
+    v.boundBy = longer.id;
+    v.remaining = longer.remaining;
+    v.refillAt = longer.refillAt;
+    v.refill = longer.refill === undefined ? undefined : Math.min(longer.refill, room);
+  }
+}
+
+/** All windows as display rows, most urgent first (informational ones last, a capped window after what caps it). */
 export function windowViews(b: BuddySnapshot, now = Date.now()): WindowView[] {
-  return b.windows
+  const views: WindowView[] = b.windows
     .filter((w) => Number.isFinite(w.usedPercent))
     .map((w) => ({
       id: w.id,
@@ -51,8 +77,9 @@ export function windowViews(b: BuddySnapshot, now = Date.now()): WindowView[] {
       detail: w.detail,
       informational: !!w.informational,
       ...refillFor(w, b.refreshes, now),
-    }))
-    .sort((a, b) => Number(a.informational) - Number(b.informational) || a.remaining - b.remaining || rank(a.id) - rank(b.id));
+    }));
+  boundByLonger(views);
+  return views.sort((a, b) => Number(a.informational) - Number(b.informational) || a.remaining - b.remaining || Number(!!a.boundBy) - Number(!!b.boundBy) || rank(a.id) - rank(b.id));
 }
 
 /**

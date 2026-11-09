@@ -110,8 +110,9 @@ class WinRow {
       s.classList.toggle('soon', i >= lit && i < lit + soon);
     });
     // refill timing lives in the timeline; the row only keeps extra detail such as "$1.20 / $5.00"
-    this.when.textContent = w.detail ?? '';
-    this.foot.hidden = !w.detail;
+    const bound = w.boundBy ? t(locale, 'ui.boundBy', { label: windowLabel(locale, { id: w.boundBy, label: w.boundBy } as UsageWindow) }) : '';
+    this.when.textContent = [w.detail, bound].filter(Boolean).join(' · ');
+    this.foot.hidden = !this.when.textContent;
   }
 }
 

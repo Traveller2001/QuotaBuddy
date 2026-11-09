@@ -206,14 +206,46 @@ test('sub2api pool usage: windows never show more than the available accounts ca
     ['11-04T06:40', 33.3],
     ['11-05T07:00', 33.3],
   ]);
+  // one account back: its share, minus the 2.7 points of 5h it has used itself (the 10:40 refill)
   const one = pool(1);
   assert.deepEqual(
     one.windows.map((w) => [w.id, w.usedPercent]),
     [
-      ['5h', 66.7],
+      ['5h', 69.4],
       ['7d', 66.7],
     ],
   );
+});
+
+test('sub2api pool usage: an available account that used up its own window is not counted as room', () => {
+  // Real case: 4 Claude accounts, three blocked by 7d (and fresh on 5h), the only available one at
+  // 99% of its 5h but not limited yet. The pool sample said 5h 75% left.
+  const p = parsePool({
+    available: true,
+    accounts_total: 4,
+    accounts_available: 1,
+    five_hour: { used_percent: 24.8, next_reset_at: '2026-11-09T10:10:00Z', next_restore_percent: 24.8 },
+    seven_day: { used_percent: 78.3, next_reset_at: '2026-11-10T23:59:59Z', next_restore_percent: 25 },
+    refreshes: [
+      { at: '2026-11-09T10:10:00Z', kind: 'five_hour', restore_percent: 24.8, accounts: 1 },
+      { at: '2026-11-10T23:59:59Z', kind: 'seven_day', restore_percent: 25, accounts: 1 },
+      { at: '2026-11-11T00:00:00Z', kind: 'account', accounts: 1 },
+      { at: '2026-11-11T20:59:59Z', kind: 'seven_day', restore_percent: 25, accounts: 1 },
+      { at: '2026-11-11T21:00:00Z', kind: 'account', accounts: 1 },
+      { at: '2026-11-12T07:00:00Z', kind: 'account', accounts: 1 },
+      { at: '2026-11-12T07:00:00Z', kind: 'seven_day', restore_percent: 25, accounts: 1 },
+      { at: '2026-11-15T22:00:00Z', kind: 'seven_day', restore_percent: 3.3, accounts: 1 },
+    ],
+  });
+  assert.deepEqual(
+    p.windows.map((w) => [w.id, w.usedPercent]),
+    [
+      ['5h', 99.8],
+      ['7d', 78.3],
+    ],
+  );
+  // its own 5h reset gives the room back
+  assert.equal(p.refreshes.find((r) => r.kind === 'five_hour')?.restorePercent, 24.8);
 });
 
 test('official Claude subscription usage', () => {
