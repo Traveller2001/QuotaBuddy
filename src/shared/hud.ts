@@ -14,6 +14,8 @@ export interface WindowView {
   informational: boolean;
   /** A longer window with less left caps this one (e.g. 5h when 7d is used up): its id. */
   boundBy?: string;
+  /** The gateway's pool figure counting every account, when it differs from what is usable now. */
+  poolRemaining?: number;
 }
 
 /** Pool refresh kinds reported by Sub2API, keyed by our window ids. */
@@ -76,6 +78,7 @@ export function windowViews(b: BuddySnapshot, now = Date.now()): WindowView[] {
       remaining: Math.max(0, Math.min(100, 100 - effectiveUsed(w, now))),
       detail: w.detail,
       informational: !!w.informational,
+      poolRemaining: w.poolRemaining,
       ...refillFor(w, b.refreshes, now),
     }));
   boundByLonger(views);

@@ -111,7 +111,10 @@ class WinRow {
     });
     // refill timing lives in the timeline; the row only keeps extra detail such as "$1.20 / $5.00"
     const bound = w.boundBy ? t(locale, 'ui.boundBy', { label: windowLabel(locale, { id: w.boundBy, label: w.boundBy } as UsageWindow) }) : '';
-    this.when.textContent = [w.detail, bound].filter(Boolean).join(' · ');
+    // the gateway's web UI shows the pool figure over every account: say so when it differs
+    const pool =
+      w.poolRemaining !== undefined && w.poolRemaining - w.remaining >= 1 ? t(locale, 'ui.poolFigure', { pct: Math.round(w.poolRemaining) }) : '';
+    this.when.textContent = [w.detail, bound, pool].filter(Boolean).join(' · ');
     this.foot.hidden = !this.when.textContent;
   }
 }

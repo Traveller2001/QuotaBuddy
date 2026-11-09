@@ -248,6 +248,91 @@ test('sub2api pool usage: an available account that used up its own window is no
   assert.equal(p.refreshes.find((r) => r.kind === 'five_hour')?.restorePercent, 24.8);
 });
 
+test('sub2api pool usage: the gateway\'s own usable figure wins over the estimate', () => {
+  // Real response from a Sub2API that reports available_remaining_percent: 5 accounts, #2 and #5
+  // available (5h left 77% and 35%), #1 #3 #4 used up on 7d. Its web UI still shows 82% / 35% left.
+  const p = parsePool({
+    available: true,
+    accounts_total: 5,
+    accounts_available: 2,
+    accounts_exhausted: 3,
+    five_hour: { used_percent: 17.6, remaining_percent: 82.4, available_remaining_percent: 22.4, next_reset_at: '2026-11-09T14:50:00Z', next_restore_percent: 13 },
+    seven_day: { used_percent: 65, remaining_percent: 35, available_remaining_percent: 22.4, next_reset_at: '2026-11-10T21:00:00Z', next_restore_percent: 1.8 },
+    refreshes: [
+      { at: '2026-11-09T14:50:00Z', kind: 'five_hour', restore_percent: 13, accounts: 1, account_indexes: [5] },
+      { at: '2026-11-09T16:10:00Z', kind: 'five_hour', restore_percent: 4.6, accounts: 1, account_indexes: [2] },
+      { at: '2026-11-10T21:00:00Z', kind: 'seven_day', restore_percent: 1.8, accounts: 1, account_indexes: [5] },
+      { at: '2026-11-10T23:59:59Z', kind: 'seven_day', restore_percent: 20, accounts: 1, account_indexes: [3] },
+      { at: '2026-11-11T00:00:00Z', kind: 'account', accounts: 1, account_indexes: [3] },
+      { at: '2026-11-11T21:00:00Z', kind: 'account', accounts: 1, account_indexes: [4] },
+      { at: '2026-11-11T21:00:00Z', kind: 'seven_day', restore_percent: 20, accounts: 1, account_indexes: [4] },
+      { at: '2026-11-12T06:59:59Z', kind: 'seven_day', restore_percent: 20, accounts: 1, account_indexes: [1] },
+    ],
+  });
+  assert.deepEqual(
+    p.windows.map((w) => [w.id, w.usedPercent, w.poolRemaining]),
+    [
+      ['5h', 77.6, 82.4],
+      ['7d', 77.6, 35],
+    ],
+  );
+  // a used-up 7d account coming back gives its share back
+  assert.equal(p.refreshes.find((r) => r.kind === 'seven_day' && r.at === '2026-11-10T23:59:59Z')?.restorePercent, 20);
+  // all accounts used up on their windows: no separate "accounts" row, the windows say it
+  const allOut = parsePool({
+    available: true,
+    accounts_total: 2,
+    accounts_available: 0,
+    accounts_exhausted: 2,
+    five_hour: { used_percent: 40, available_remaining_percent: 0 },
+    refreshes: [],
+  });
+  assert.deepEqual(
+    allOut.windows.map((w) => [w.id, w.usedPercent]),
+    [['5h', 100]],
+  );
+});
+
+test('sub2api pool usage: a reset of an account still blocked afterwards is not a refill', () => {
+  // Real response: 4 Codex accounts, none available. #1's 5h resets at 12:36 but it is out of 7d
+  // until the 11th; #4 is back at 15:57 with its 5h reset.
+  const p = parsePool({
+    available: true,
+    partial: true,
+    accounts_total: 4,
+    accounts_available: 0,
+    accounts_exhausted: 4,
+    accounts_unknown: 1,
+    five_hour: { used_percent: 78.3, remaining_percent: 21.7, available_remaining_percent: 0, next_reset_at: '2026-11-09T12:36:59Z', next_restore_percent: 11.7 },
+    seven_day: { used_percent: 58, remaining_percent: 42, available_remaining_percent: 0, next_reset_at: '2026-11-11T02:26:23Z', next_restore_percent: 25 },
+    refreshes: [
+      { at: '2026-11-09T12:36:59Z', kind: 'five_hour', restore_percent: 11.7, accounts: 1, account_indexes: [1] },
+      { at: '2026-11-09T15:57:00Z', kind: 'five_hour', restore_percent: 33.3, accounts: 1, account_indexes: [4] },
+      { at: '2026-11-09T15:57:01.484124Z', kind: 'account', accounts: 1, account_indexes: [4] },
+      { at: '2026-11-09T16:07:36Z', kind: 'five_hour', restore_percent: 33.3, accounts: 1, account_indexes: [2] },
+      { at: '2026-11-09T16:07:36.955493Z', kind: 'account', accounts: 1, account_indexes: [2] },
+      { at: '2026-11-11T02:26:23Z', kind: 'seven_day', restore_percent: 25, accounts: 1, account_indexes: [3] },
+      { at: '2026-11-11T06:41:09Z', kind: 'seven_day', restore_percent: 25, accounts: 1, account_indexes: [1] },
+      { at: '2026-11-11T06:41:09.956823Z', kind: 'account', accounts: 1, account_indexes: [1] },
+    ],
+  });
+  assert.deepEqual(
+    p.refreshes.filter((r) => r.kind === 'five_hour').map((r) => [r.at.slice(11, 16), r.restorePercent]),
+    [
+      ['15:57', 25],
+      ['16:07', 25],
+    ],
+    "#1's 12:36 reset is dropped, and one account of four is at most 25%",
+  );
+  assert.deepEqual(
+    p.windows.map((w) => [w.id, w.usedPercent]),
+    [
+      ['5h', 100],
+      ['7d', 100],
+    ],
+  );
+});
+
 test('official Claude subscription usage', () => {
   const p = parseClaudeSubscription(
     {

@@ -166,8 +166,12 @@ export function parsePool(s: any): Parts {
     parts.notes.push({ level: 'warn', key: 'note.poolUnavailable', params: { reason: s.reason ? `: ${s.reason}` : '' } });
   }
   if (s.partial) parts.notes.push({ level: 'info', key: 'note.poolPartial' });
+  // Newer Sub2API reports what is usable now (blocked / used-up accounts count as 0, each account
+  // limited by its tightest window); older ones only the average over every account.
+  const usable = new Map<string, number>();
   const add = (id: string, w: any) => {
     if (!w || typeof w.used_percent !== 'number') return;
+    if (typeof w.available_remaining_percent === 'number') usable.set(id, w.available_remaining_percent);
     parts.windows.push({
       id,
       label: id,
@@ -175,6 +179,7 @@ export function parsePool(s: any): Parts {
       resetsAt: w.next_reset_at ?? undefined,
       restorePercent: typeof w.next_restore_percent === 'number' ? w.next_restore_percent : undefined,
       scope: 'pool',
+      poolRemaining: 100 - w.used_percent,
     });
   };
   add('5h', s.five_hour);
@@ -182,15 +187,31 @@ export function parsePool(s: any): Parts {
   const total = Number(s.accounts_total) || 0;
   const available = Number(s.accounts_available) || 0;
   if (total > 0) parts.accounts = { total, available };
-  parts.refreshes = (Array.isArray(s.refreshes) ? s.refreshes : []).map((r: any) => ({
-    at: r.at,
-    kind: r.kind,
-    restorePercent: typeof r.restore_percent === 'number' ? r.restore_percent : undefined,
-    accounts: typeof r.accounts === 'number' ? r.accounts : undefined,
-  }));
+  const raw: any[] = Array.isArray(s.refreshes) ? s.refreshes : [];
+  // With account indexes: a window reset of an account that stays blocked past it gives nothing usable
+  const blockedUntil = new Map<number, number>();
+  for (const r of raw) {
+    if (r.kind !== 'account' || !Array.isArray(r.account_indexes)) continue;
+    for (const i of r.account_indexes) blockedUntil.set(i, Math.max(blockedUntil.get(i) ?? 0, Date.parse(r.at)));
+  }
+  const stillBlocked = (r: any) =>
+    r.kind !== 'account' &&
+    Array.isArray(r.account_indexes) &&
+    r.account_indexes.length > 0 &&
+    r.account_indexes.every((i: number) => (blockedUntil.get(i) ?? 0) > Date.parse(r.at) + SAME_MOMENT_MS);
+  parts.refreshes = raw
+    .filter((r) => !stillBlocked(r))
+    .map((r: any) => {
+      const accounts = typeof r.accounts === 'number' ? r.accounts : undefined;
+      let restorePercent = typeof r.restore_percent === 'number' ? r.restore_percent : undefined;
+      // n accounts are never more than n / total of the pool
+      if (restorePercent !== undefined && accounts && total > 0) restorePercent = Math.min(restorePercent, Math.round(((accounts * 100) / total) * 10) / 10);
+      return { at: r.at, kind: r.kind, restorePercent, accounts };
+    });
   if (total > 0) correctForRateLimitedAccounts(parts, total);
-  const explained = parts.windows.some((w) => w.usedPercent >= 99.5);
-  if (total > 0) capToAvailableAccounts(parts, total, available);
+  const exhausted = Number(s.accounts_exhausted) || 0;
+  const explained = parts.windows.some((w) => w.usedPercent >= 99.5) || (total > 0 && exhausted >= total);
+  if (total > 0) capToAvailableAccounts(parts, total, available, usable);
   if (total > 0 && available === 0 && !explained) {
     // every account is out but no window explains it (overloaded / paused): show that on its own
     const back = parts.refreshes.find((r) => r.kind === 'account');
@@ -215,7 +236,7 @@ export function parsePool(s: any): Parts {
  * time accounts come back, the window gets their share back (never more than was cut). That becomes
  * a refill of the window, merged into its own reset when both happen at the same moment.
  */
-export function capToAvailableAccounts(parts: Parts, total: number, available: number): void {
+export function capToAvailableAccounts(parts: Parts, total: number, available: number, usable = new Map<string, number>()): void {
   const share = (Math.min(available, total) * 100) / total;
   const comeback = parts.refreshes
     .filter((r) => r.kind === 'account')
@@ -227,7 +248,8 @@ export function capToAvailableAccounts(parts: Parts, total: number, available: n
   }
   for (const w of parts.windows) {
     if (w.scope !== 'pool') continue;
-    const maxRemaining = Math.max(0, share - (usedByAvailable.get(WINDOW_REFRESH[w.id]) ?? 0));
+    // the gateway's own figure when it has one: it knows each account, the estimate only infers it
+    const maxRemaining = usable.get(w.id) ?? Math.max(0, share - (usedByAvailable.get(WINDOW_REFRESH[w.id]) ?? 0));
     let cut = 100 - w.usedPercent - maxRemaining;
     if (cut <= 0.05) continue;
     w.usedPercent = Math.round((100 - maxRemaining) * 10) / 10;

@@ -30,6 +30,8 @@ export interface UsageWindow {
   scope: 'pool' | 'key' | 'account';
   /** Shown in the panel but ignored for the mood (e.g. model-specific weekly caps). */
   informational?: boolean;
+  /** Pool windows: what the gateway's own pool figure says is left, counting every account (its web UI shows this). */
+  poolRemaining?: number;
 }
 
 export interface RefreshEvent {
