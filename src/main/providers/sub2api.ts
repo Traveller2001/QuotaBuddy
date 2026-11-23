@@ -166,12 +166,15 @@ export function parsePool(s: any): Parts {
     parts.notes.push({ level: 'warn', key: 'note.poolUnavailable', params: { reason: s.reason ? `: ${s.reason}` : '' } });
   }
   if (s.partial) parts.notes.push({ level: 'info', key: 'note.poolPartial' });
-  // Newer Sub2API reports what is usable now (blocked / used-up accounts count as 0, each account
-  // limited by its tightest window); older ones only the average over every account.
+  // What is usable now, as the gateway's web UI shows it ("平均可用"): available_percent sums each
+  // window on its own over the accounts not used up, divided by all accounts. Slightly older versions
+  // only have available_remaining_percent (every account limited by its tightest window, so 5h = 7d);
+  // the oldest only the average over every account, which the estimate below corrects.
   const usable = new Map<string, number>();
   const add = (id: string, w: any) => {
     if (!w || typeof w.used_percent !== 'number') return;
-    if (typeof w.available_remaining_percent === 'number') usable.set(id, w.available_remaining_percent);
+    const now = typeof w.available_percent === 'number' ? w.available_percent : w.available_remaining_percent;
+    if (typeof now === 'number') usable.set(id, now);
     parts.windows.push({
       id,
       label: id,
@@ -179,7 +182,6 @@ export function parsePool(s: any): Parts {
       resetsAt: w.next_reset_at ?? undefined,
       restorePercent: typeof w.next_restore_percent === 'number' ? w.next_restore_percent : undefined,
       scope: 'pool',
-      poolRemaining: 100 - w.used_percent,
     });
   };
   add('5h', s.five_hour);
@@ -248,9 +250,12 @@ export function capToAvailableAccounts(parts: Parts, total: number, available: n
   }
   for (const w of parts.windows) {
     if (w.scope !== 'pool') continue;
-    // the gateway's own figure when it has one: it knows each account, the estimate only infers it
-    const maxRemaining = usable.get(w.id) ?? Math.max(0, share - (usedByAvailable.get(WINDOW_REFRESH[w.id]) ?? 0));
+    // the gateway's own figure when it has one, as is (it is what its web UI shows); the estimate
+    // only infers it, so it can only lower the average
+    const served = usable.get(w.id);
+    const maxRemaining = served ?? Math.max(0, share - (usedByAvailable.get(WINDOW_REFRESH[w.id]) ?? 0));
     let cut = 100 - w.usedPercent - maxRemaining;
+    if (served !== undefined) w.usedPercent = Math.round((100 - served) * 10) / 10;
     if (cut <= 0.05) continue;
     w.usedPercent = Math.round((100 - maxRemaining) * 10) / 10;
     const kind = WINDOW_REFRESH[w.id];

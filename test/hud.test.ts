@@ -144,23 +144,32 @@ test('a pool outage is always on the meter, whatever window was chosen', () => {
 });
 
 test('a shorter window shows no more than a longer one has left, and refills with it', () => {
-  // Real case: the only available Codex account has 7d used up but 5h mostly free
-  const codex = snap(
-    [
-      { id: '5h', label: '5h', usedPercent: 83.8, scope: 'pool', resetsAt: iso(160) },
-      { id: '7d', label: '7d', usedPercent: 99.8, scope: 'pool', resetsAt: iso(2000) },
-    ],
-    [
-      { at: iso(160), kind: 'five_hour', restorePercent: 8.8 },
-      { at: iso(2000), kind: 'seven_day', restorePercent: 24.8 },
-    ],
-  );
-  const views = windowViews(codex, NOW);
+  // a subscription with 7d nearly used up but 5h mostly free
+  const plan = snap([
+    { id: '5h', label: '5h', usedPercent: 83.8, scope: 'account', resetsAt: iso(160) },
+    { id: '7d', label: '7d', usedPercent: 99.8, scope: 'account', resetsAt: iso(2000) },
+  ]);
+  const views = windowViews(plan, NOW);
   assert.deepEqual(
     views.map((v) => [v.id, Math.round(v.remaining * 10) / 10, v.boundBy, v.refillAt, v.refill && Math.round(v.refill * 10) / 10]),
     [
-      ['7d', 0.2, undefined, iso(2000), 24.8],
+      ['7d', 0.2, undefined, iso(2000), 99.8],
       ['5h', 0.2, '7d', iso(2000), 16],
+    ],
+  );
+  // pool windows stay as the gateway reports them (its web UI shows each window on its own)
+  const pool = windowViews(
+    snap([
+      { id: '5h', label: '5h', usedPercent: 62.7, scope: 'pool' },
+      { id: '7d', label: '7d', usedPercent: 89.7, scope: 'pool' },
+    ]),
+    NOW,
+  );
+  assert.deepEqual(
+    pool.map((v) => [v.id, Math.round(v.remaining * 10) / 10, v.boundBy]),
+    [
+      ['7d', 10.3, undefined],
+      ['5h', 37.3, undefined],
     ],
   );
   // 7d is not held back by an empty 5h: its budget is still there

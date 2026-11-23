@@ -14,8 +14,6 @@ export interface WindowView {
   informational: boolean;
   /** A longer window with less left caps this one (e.g. 5h when 7d is used up): its id. */
   boundBy?: string;
-  /** The gateway's pool figure counting every account, when it differs from what is usable now. */
-  poolRemaining?: number;
 }
 
 /** Pool refresh kinds reported by Sub2API, keyed by our window ids. */
@@ -49,14 +47,15 @@ const HOURS: Record<string, number> = { '5h': 5, '1d': 24, daily: 24, '7d': 168,
 /**
  * A request needs room in every window, so a shorter window can't offer more than a longer one has
  * left: with 7d used up, 5h is empty too however little of it was used. It then also fills up when
- * the longer window does (never by more than its own room).
+ * the longer window does (never by more than its own room). Pool windows are left as the gateway
+ * reports them: it already leaves used-up accounts out, and its web UI shows each window on its own.
  */
 function boundByLonger(views: WindowView[]): void {
   for (const v of views) {
     const hours = HOURS[v.id];
-    if (v.informational || hours === undefined) continue;
+    if (v.informational || hours === undefined || v.scope === 'pool') continue;
     const longer = views
-      .filter((o) => !o.informational && (HOURS[o.id] ?? 0) > hours && o.remaining < v.remaining)
+      .filter((o) => !o.informational && o.scope !== 'pool' && (HOURS[o.id] ?? 0) > hours && o.remaining < v.remaining)
       .sort((a, c) => a.remaining - c.remaining)[0];
     if (!longer) continue;
     const room = v.remaining - longer.remaining;
@@ -78,7 +77,6 @@ export function windowViews(b: BuddySnapshot, now = Date.now()): WindowView[] {
       remaining: Math.max(0, Math.min(100, 100 - effectiveUsed(w, now))),
       detail: w.detail,
       informational: !!w.informational,
-      poolRemaining: w.poolRemaining,
       ...refillFor(w, b.refreshes, now),
     }));
   boundByLonger(views);

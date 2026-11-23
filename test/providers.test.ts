@@ -270,10 +270,10 @@ test('sub2api pool usage: the gateway\'s own usable figure wins over the estimat
     ],
   });
   assert.deepEqual(
-    p.windows.map((w) => [w.id, w.usedPercent, w.poolRemaining]),
+    p.windows.map((w) => [w.id, w.usedPercent]),
     [
-      ['5h', 77.6, 82.4],
-      ['7d', 77.6, 35],
+      ['5h', 77.6],
+      ['7d', 77.6],
     ],
   );
   // a used-up 7d account coming back gives its share back
@@ -329,6 +329,32 @@ test('sub2api pool usage: a reset of an account still blocked afterwards is not 
     [
       ['5h', 100],
       ['7d', 100],
+    ],
+  );
+});
+
+test('sub2api pool usage: available_percent (each window on its own, as the web UI shows) wins', () => {
+  // Real response: 4 Codex accounts, #1 and #4 available, #2 used up on 7d, #3 unknown (7d only)
+  const p = parsePool({
+    available: true,
+    partial: true,
+    accounts_total: 4,
+    accounts_available: 3,
+    accounts_exhausted: 1,
+    accounts_unknown: 1,
+    five_hour: { used_percent: 17, remaining_percent: 83, available_remaining_percent: 7.8, available_percent: 37.3, next_reset_at: '2026-11-23T11:17:34Z', next_restore_percent: 15 },
+    seven_day: { used_percent: 89.8, remaining_percent: 10.2, available_remaining_percent: 7.8, available_percent: 10.3, next_reset_at: '2026-11-23T11:34:36Z', next_restore_percent: 25 },
+    refreshes: [
+      { at: '2026-11-23T11:17:34Z', kind: 'five_hour', restore_percent: 15, accounts: 1, account_indexes: [1] },
+      { at: '2026-11-23T11:34:36Z', kind: 'seven_day', restore_percent: 25, accounts: 1, account_indexes: [2] },
+      { at: '2026-11-23T11:34:37.441281Z', kind: 'account', accounts: 1, account_indexes: [2] },
+    ],
+  });
+  assert.deepEqual(
+    p.windows.map((w) => [w.id, w.usedPercent]),
+    [
+      ['5h', 62.7],
+      ['7d', 89.7],
     ],
   );
 });
